@@ -11,7 +11,7 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-# 1. KONFIGURACIJA (Mora biti prva)
+# 1. KONFIGURACIJA
 st.set_page_config(page_title="Toplotna pumpa – PRO ANALIZA", layout="wide")
 
 if not HAS_MATPLOTLIB:
@@ -19,7 +19,7 @@ if not HAS_MATPLOTLIB:
     st.info("Instaliram grafičke module. Osvežite stranicu za 1 minut.")
     st.stop()
 
-st.title("🔥 Toplotna pumpa – Kompletna Analiza (V5.7)")
+st.title("🔥 Toplotna pumpa – Kompletna Analiza (V5.8)")
 
 # --- LINK I IZVOR ---
 onedrive_url = "https://1drv.ms/x/c/a15c6fc067062efb/IQD5_1Yj9WhfRafvHJ1x3Y-wAYVUR7tP6_uTeZ3gnxYa9o4"
@@ -61,15 +61,14 @@ if df_raw is not None:
         # KALKULACIJE
         df["COP"] = df["Proizvedena energija (kWh)"] / df["Potrošena struja (kWh)"]
         df["kWh/dan"] = df["Potrošena struja (kWh)"] / df["Dana u mesecu"]
-        df["Startova/dan"] = df["Startovi kompresora"] / df["Dana u mesecu"]
         
         ukupna_proizvedena = df["Proizvedena energija (kWh)"].sum()
         ukupna_struja = df["Potrošena struja (kWh)"].sum()
         prosek_dan = df["kWh/dan"].mean()
 
-        st.success("✅ Svi podaci su uspešno učitani!")
+        st.success("✅ Podaci uspešno učitani!")
 
-        # 3. SVIH 7 TABOVA
+        # 3. TABOVI
         tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
             "📊 Pregled", "🌡 Kriva", "💡 EPS", "📅 Sezona", "🚀 OPTIMIZACIJA", "❄️ DEFROST", "💰 POREĐENJE"
         ])
@@ -90,16 +89,16 @@ if df_raw is not None:
             fig3, ax3 = plt.subplots()
             ax3.scatter(df["Spoljna T (°C)"], df["LWT (°C)"], color="red", s=100, label="Realne tačke")
             tx = np.linspace(df["Spoljna T (°C)"].min()-2, df["Spoljna T (°C)"].max()+2, 10)
-            ty = 38 - 0.4 * tx # Teoretska kriva 0.4
-            ax3.plot(tx, ty, "--", color="gray", label="Kriva 0.4")
-            ax3.set_xlabel("Spoljna Temperatura (°C)"); ax3.set_ylabel("Polaz Vode (LWT)"); ax3.legend()
+            ty = 38 - 0.4 * tx
+            ax3.plot(tx, ty, "--", color="gray", label="Referentna kriva")
+            ax3.set_xlabel("Spoljna T"); ax3.set_ylabel("LWT"); ax3.legend()
             st.pyplot(fig3); plt.close(fig3)
 
         with tab3:
             st.subheader("💡 EPS i Troškovi")
             cena = st.number_input("Cena kWh (din)", value=10.5)
-            racun = ukupna_struja * cena
-            st.metric("Ukupan trošak za struju", f"{int(racun)} RSD")
+            racun_tp = ukupna_struja * cena
+            st.metric("Ukupan račun za struju", f"{int(racun_tp)} RSD")
             st.bar_chart(df, x="Mesec", y="Potrošena struja (kWh)")
 
         with tab4:
@@ -110,29 +109,48 @@ if df_raw is not None:
         with tab5:
             st.subheader("🚀 Simulator optimizacije")
             smanjenje = st.slider("Smanji LWT za (°C)", 0, 5, 1)
-            usteda = prosek_dan * dani_sezone * (smanjenje * 0.03) # 3% po stepenu
+            usteda = prosek_dan * dani_sezone * (smanjenje * 0.03)
             st.metric("Potencijalna ušteda", f"{int(usteda)} kWh")
-            comfort = int(max(0, 100 - (df["Startova/dan"].mean() * 3)))
-            st.write(f"**Stabilnost rada (Comfort Index):** {comfort}/100")
 
         with tab6:
             st.subheader("❄️ Analiza otapanja (Defrost)")
             v_def = st.slider("Minuta po defrostu", 5, 15, 8)
             n_def = st.slider("Defrosta po satu rada", 0.5, 3.0, 1.0)
-            sati_kompr = df["Rad kompresora (h)"].sum()
-            gubitak = (v_def / 60) * n_def * 5 * sati_kompr # 5kW prosek snage
-            st.metric("Gubitak energije na defrost", f"{int(gubitak)} kWh")
+            gubitak = (v_def / 60) * n_def * 5 * df["Rad kompresora (h)"].sum()
+            st.metric("Gubitak na defrost", f"{int(gubitak)} kWh")
 
         with tab7:
-            st.subheader("💰 Poređenje sa drugim energentima")
-            c_drva = st.number_input("Cena drva (din/m3)", value=9000)
-            t_drva = (ukupna_proizvedena / (2000 * 0.7)) * c_drva
-            st.success(f"Ušteda u odnosu na drva: {int(t_drva - racun)} RSD")
-            st.info("Računica je bazirana na energetskoj vrednosti drveta i prosečnom COP-u.")
+            st.subheader("💰 Poređenje troškova grejanja")
+            st.write(f"Ukupno proizvedena toplotna energija: **{int(ukupna_proizvedena)} kWh**")
+            
+            c1, c2, c3 = st.columns(3)
+            
+            with c1:
+                st.markdown("### 🪵 Drva")
+                cena_drva = st.number_input("Cena drva (din/m3)", value=9000)
+                trosak_drva = (ukupna_proizvedena / 1400) * cena_drva
+                st.metric("Trošak drva", f"{int(trosak_drva)} RSD")
+                st.write(f"Ušteda: **{int(trosak_drva - racun_tp)} RSD**")
+
+            with c2:
+                st.markdown("### 🪵 Pelet")
+                cena_peleta = st.number_input("Cena peleta (din/kg)", value=32)
+                trosak_peleta = (ukupna_proizvedena / 4.8) * cena_peleta
+                st.metric("Trošak peleta", f"{int(trosak_peleta)} RSD")
+                st.write(f"Ušteda: **{int(trosak_peleta - racun_tp)} RSD**")
+
+            with c3:
+                st.markdown("### 💨 Gas")
+                cena_gasa = st.number_input("Cena gasa (din/m3)", value=55)
+                trosak_gas = (ukupna_proizvedena / 9.5) * cena_gasa
+                st.metric("Trošak gasa", f"{int(trosak_gas)} RSD")
+                st.write(f"Ušteda: **{int(trosak_gas - racun_tp)} RSD**")
+            
+            st.divider()
+            st.info("Obračun koristi prosečne energetske vrednosti: Drva ~1400kWh/m3, Pelet ~4.8kWh/kg, Gas ~9.5kWh/m3.")
 
     except Exception as e:
-        st.error(f"⚠️ Greška u tabeli: {e}")
-        st.write("Proverite da li se kolone u Excelu zovu tačno: Mesec, Proizvedena energija (kWh), Potrošena struja (kWh), Rad kompresora (h), Rad pumpe (h), Startovi kompresora, LWT (°C), Spoljna T (°C), Dana u mesecu")
-        st.write("Kolone koje vidim:", list(df_raw.columns))
+        st.error(f"Struktura tabele nije ispravna: {e}")
 else:
-    st.warning("Čekam na podatke... Proverite OneDrive link ili učitajte Excel fajl.")
+    st.warning("Čekam podatke iz Excela...")
+
