@@ -1,10 +1,3 @@
-Ta poruka znači da aplikacija radi (nema više "Syntax Error"), ali ne prepoznaje tvoj link kao novi podatak ili je ostao onaj stari tekst u kodu.
-
-Do ovoga dolazi ako linija 11 nije precizno zamenjena. Evo celog koda sa već ubačenim tvojim linkom. Samo ga prekopiraj u potpunosti, obrisavši sve prethodno.
-
-Kompletan kod (sa tvojim linkom):
-Python
-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
