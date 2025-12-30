@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import base64
-import os
 
 # Pokušaj uvoza matplotlib-a
 try:
@@ -16,37 +15,33 @@ st.set_page_config(page_title="Toplotna pumpa – PRO ANALIZA", layout="wide")
 
 if not HAS_MATPLOTLIB:
     st.title("⏳ Instalacija komponenti...")
-    st.info("Instaliram grafičke module. Osvežite stranicu za 1 minut.")
+    st.info("Sistem instalira grafičke module. Osvežite stranicu za 1 minut.")
     st.stop()
 
-st.title("🔥 Toplotna pumpa – Kompletna Analiza (V5.8)")
+st.title("🔥 Toplotna pumpa – Kompletna Analiza (V5.9)")
 
-# --- LINK I IZVOR ---
-onedrive_url = "https://1drv.ms/x/c/a15c6fc067062efb/IQD5_1Yj9WhfRafvHJ1x3Y-wAYVUR7tP6_uTeZ3gnxYa9o4"
-
-def get_direct_download(url):
-    try:
-        clean_url = url.split('?')[0]
-        s = base64.b64encode(bytes(clean_url, 'utf-8')).decode('utf-8')
-        return f"https://api.onedrive.com/v1.1/shares/u!{s.replace('/','_').replace('+','-').rstrip('=')}/root/content"
-    except: return None
-
-st.sidebar.header("📁 Izvor podataka")
-uploaded_file = st.sidebar.file_uploader("Ili učitaj Excel ručno", type=["xlsx"])
+# --- LINK KA GOOGLE SHEETS (PUBLISHED AS EXCEL) ---
+# Ovde zalepi link koji si dobio preko "Publish to web"
+gsheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQHYTvxs0PVenFOa59SezJzHDheIswLZoWzFtotG8N8rpdy7ESgHFIYY_R0Bqr9FA/pub?output=xlsx"
 
 @st.cache_data(ttl=60)
-def load_data(url, file):
+def load_data(url):
     try:
-        if file is not None:
-            return pd.read_excel(file, engine='openpyxl')
-        direct_link = get_direct_download(url)
-        if direct_link:
-            return pd.read_excel(direct_link, engine='openpyxl')
-    except: return None
-    return None
+        # Čitamo direktno sa Google Sheets linka koji glumi Excel fajl
+        df = pd.read_excel(url, engine='openpyxl')
+        return df
+    except Exception as e:
+        st.error(f"Greška pri povlačenju podataka: {e}")
+        return None
 
 # 2. OBRADA PODATAKA
-df_raw = load_data(onedrive_url, uploaded_file)
+df_raw = load_data(gsheet_url)
+
+# Ako Google link ne radi, dajemo opciju ručnog uploada kao rezervu
+st.sidebar.header("📁 Izvor podataka")
+uploaded_file = st.sidebar.file_uploader("Ili učitaj Excel ručno", type=["xlsx"])
+if uploaded_file:
+    df_raw = pd.read_excel(uploaded_file, engine='openpyxl')
 
 if df_raw is not None:
     try:
@@ -68,7 +63,7 @@ if df_raw is not None:
 
         st.success("✅ Podaci uspešno učitani!")
 
-        # 3. TABOVI
+        # 3. SVIH 7 TABOVA
         tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
             "📊 Pregled", "🌡 Kriva", "💡 EPS", "📅 Sezona", "🚀 OPTIMIZACIJA", "❄️ DEFROST", "💰 POREĐENJE"
         ])
@@ -78,10 +73,12 @@ if df_raw is not None:
             st.dataframe(df.round(2), use_container_width=True)
             c1, c2 = st.columns(2)
             with c1:
-                fig1, ax1 = plt.subplots(); ax1.bar(df["Mesec"], df["kWh/dan"], color="skyblue")
+                fig1, ax1 = plt.subplots()
+                ax1.bar(df["Mesec"], df["kWh/dan"], color="skyblue")
                 ax1.set_title("Potrošnja (kWh/dan)"); st.pyplot(fig1); plt.close(fig1)
             with c2:
-                fig2, ax2 = plt.subplots(); ax2.plot(df["Mesec"], df["COP"], marker="o", color="green")
+                fig2, ax2 = plt.subplots()
+                ax2.plot(df["Mesec"], df["COP"], marker="o", color="green")
                 ax2.set_title("Efikasnost (COP)"); ax2.grid(True); st.pyplot(fig2); plt.close(fig2)
 
         with tab2:
@@ -121,36 +118,28 @@ if df_raw is not None:
 
         with tab7:
             st.subheader("💰 Poređenje troškova grejanja")
-            st.write(f"Ukupno proizvedena toplotna energija: **{int(ukupna_proizvedena)} kWh**")
-            
             c1, c2, c3 = st.columns(3)
-            
             with c1:
                 st.markdown("### 🪵 Drva")
                 cena_drva = st.number_input("Cena drva (din/m3)", value=9000)
-                trosak_drva = (ukupna_proizvedena / 1400) * cena_drva
-                st.metric("Trošak drva", f"{int(trosak_drva)} RSD")
-                st.write(f"Ušteda: **{int(trosak_drva - racun_tp)} RSD**")
-
+                t_drva = (ukupna_proizvedena / 1400) * cena_drva
+                st.metric("Trošak", f"{int(t_drva)} RSD")
+                st.write(f"Ušteda: **{int(t_drva - racun_tp)} RSD**")
             with c2:
                 st.markdown("### 🪵 Pelet")
                 cena_peleta = st.number_input("Cena peleta (din/kg)", value=32)
-                trosak_peleta = (ukupna_proizvedena / 4.8) * cena_peleta
-                st.metric("Trošak peleta", f"{int(trosak_peleta)} RSD")
-                st.write(f"Ušteda: **{int(trosak_peleta - racun_tp)} RSD**")
-
+                t_peleta = (ukupna_proizvedena / 4.8) * cena_peleta
+                st.metric("Trošak", f"{int(t_peleta)} RSD")
+                st.write(f"Ušteda: **{int(t_peleta - racun_tp)} RSD**")
             with c3:
                 st.markdown("### 💨 Gas")
                 cena_gasa = st.number_input("Cena gasa (din/m3)", value=55)
-                trosak_gas = (ukupna_proizvedena / 9.5) * cena_gasa
-                st.metric("Trošak gasa", f"{int(trosak_gas)} RSD")
-                st.write(f"Ušteda: **{int(trosak_gas - racun_tp)} RSD**")
-            
-            st.divider()
-            st.info("Obračun koristi prosečne energetske vrednosti: Drva ~1400kWh/m3, Pelet ~4.8kWh/kg, Gas ~9.5kWh/m3.")
+                t_gas = (ukupna_proizvedena / 9.5) * cena_gasa
+                st.metric("Trošak", f"{int(t_gas)} RSD")
+                st.write(f"Ušteda: **{int(t_gas - racun_tp)} RSD**")
 
     except Exception as e:
-        st.error(f"Struktura tabele nije ispravna: {e}")
+        st.error(f"⚠️ Došlo je do greške u kolonama: {e}")
+        st.write("Sistem u tabeli vidi ove kolone:", list(df_raw.columns))
 else:
-    st.warning("Čekam podatke iz Excela...")
-
+    st.warning("Čekam podatke... Unesi Google Sheets link u kod ili učitaj fajl ručno levo.")
