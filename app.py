@@ -2,84 +2,85 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Toplotna pumpa – analiza V3.0", layout="wide")
-st.title("🔥 Analiza rada toplotne pumpe – V3.0")
-st.caption("Spoljna temperatura • COP • Dijagnoza krive")
+st.set_page_config(page_title="Toplotna pumpa – EPS analiza", layout="wide")
+st.title("💡 EPS analiza troška – V4.0")
+st.caption("Obračun po zonama • realan mesečni trošak")
 
-# Default podaci (primer)
+# ================== PODACI ==================
 data = {
     "Mesec": ["Novembar", "Decembar"],
-    "Proizvedena energija (kWh)": [3065, 4188],
     "Potrošena struja (kWh)": [500, 1041],
-    "Rad kompresora (h)": [514, 606],
-    "Startovi kompresora": [1179, 402],
-    "LWT (°C)": [32.4, 36.5],
-    "Spoljna T (°C)": [8.0, 2.0],
-    "Dana u mesecu": [30, 31],
 }
 
 df = pd.DataFrame(data)
 
-st.subheader("📥 Mesečni podaci")
+st.subheader("📥 Mesečna potrošnja")
 df = st.data_editor(df, num_rows="dynamic")
 
-# Izračunavanja
-df["COP"] = df["Proizvedena energija (kWh)"] / df["Potrošena struja (kWh)"]
-df["kWh/dan"] = df["Potrošena struja (kWh)"] / df["Dana u mesecu"]
-df["Startova/dan"] = df["Startovi kompresora"] / df["Dana u mesecu"]
+# ================== EPS PARAMETRI ==================
+st.subheader("⚙️ EPS parametri")
 
-st.subheader("📊 Rezultati")
-st.dataframe(df.round(2), use_container_width=True)
-
-# ---- ANALIZA U ODNOSU NA SPOLJNU TEMPERATURU ----
-st.subheader("🌡 Analiza u odnosu na spoljnu temperaturu")
-
-avg_cop = df["COP"].mean()
-avg_lwt = df["LWT (°C)"].mean()
-avg_out = df["Spoljna T (°C)"].mean()
-
-# Jednostavan benchmark
-ideal_lwt = 30 + (15 - avg_out) * 0.4
-
-if avg_lwt <= ideal_lwt + 1:
-    stanje_krive = "🟢 Kriva grejanja je dobro pogođena."
-elif avg_lwt <= ideal_lwt + 3:
-    stanje_krive = "🟡 Kriva je blago previsoka – ima prostora za optimizaciju."
-else:
-    stanje_krive = "🔴 Kriva je previsoka – sistem radi nepotrebno teško."
-
-st.info(f"Procena krive: **{stanje_krive}**")
-st.write(f"Idealni LWT za prosečnu spoljnu T ≈ **{ideal_lwt:.1f} °C**")
-
-# ---- GRAFICI ----
-st.subheader("📈 Grafici u odnosu na spoljnu temperaturu")
-
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 
 with col1:
-    fig1, ax1 = plt.subplots()
-    ax1.scatter(df["Spoljna T (°C)"], df["COP"])
-    ax1.set_xlabel("Spoljna T (°C)")
-    ax1.set_ylabel("COP")
-    ax1.set_title("COP vs spoljna temperatura")
-    st.pyplot(fig1)
+    green_limit = st.number_input("Zelena zona limit (kWh)", 0, 5000, 350)
+    green_price = st.number_input("Cena zelene (din/kWh)", 0.0, 50.0, 6.0)
 
 with col2:
-    fig2, ax2 = plt.subplots()
-    ax2.scatter(df["Spoljna T (°C)"], df["kWh/dan"])
-    ax2.set_xlabel("Spoljna T (°C)")
-    ax2.set_ylabel("kWh/dan")
-    ax2.set_title("Potrošnja vs spoljna temperatura")
-    st.pyplot(fig2)
+    blue_limit = st.number_input("Plava zona limit (kWh)", 0, 5000, 1600)
+    blue_price = st.number_input("Cena plave (din/kWh)", 0.0, 50.0, 9.0)
 
-# ---- PREPORUKE ----
-st.subheader("🔧 Pametne preporuke")
+with col3:
+    red_price = st.number_input("Cena crvene (din/kWh)", 0.0, 100.0, 18.0)
 
-if avg_lwt > ideal_lwt + 2:
-    st.warning("• Probaj snižavanje cele krive grejanja za −1 °C.")
-if avg_cop < 3.5:
-    st.warning("• COP je nizak za ovu spoljnu temperaturu – proveri protok / cikluse.")
-if avg_cop > 4:
-    st.success("• Odličan rad sistema za radijatorsko grejanje.")
+# ================== OBRAČUN ==================
+def eps_cost(kwh):
+    green = min(kwh, green_limit)
+    blue = min(max(kwh - green_limit, 0), blue_limit - green_limit)
+    red = max(kwh - blue_limit, 0)
 
-st.success("✅ V3.0 aktivna – sada imaš pravu osnovu za optimizaciju.")
+    cost = (
+        green * green_price +
+        blue * blue_price +
+        red * red_price
+    )
+
+    return green, blue, red, cost
+
+results = df["Potrošena struja (kWh)"].apply(eps_cost)
+df["Zelena (kWh)"] = results.apply(lambda x: x[0])
+df["Plava (kWh)"] = results.apply(lambda x: x[1])
+df["Crvena (kWh)"] = results.apply(lambda x: x[2])
+df["Račun (din)"] = results.apply(lambda x: x[3])
+
+st.subheader("📊 EPS obračun")
+st.dataframe(df.round(0), use_container_width=True)
+
+# ================== STATUS ==================
+st.subheader("🚦 Status zone")
+
+for _, row in df.iterrows():
+    if row["Crvena (kWh)"] > 0:
+        st.error(f"{row['Mesec']}: 🔴 U crvenoj zoni")
+    elif row["Plava (kWh)"] > 0:
+        st.warning(f"{row['Mesec']}: 🔵 U plavoj zoni")
+    else:
+        st.success(f"{row['Mesec']}: 🟢 Zelena zona")
+
+# ================== GRAFIK ==================
+st.subheader("📈 Raspodela po zonama")
+
+fig, ax = plt.subplots()
+ax.bar(df["Mesec"], df["Zelena (kWh)"], label="Zelena")
+ax.bar(df["Mesec"], df["Plava (kWh)"], bottom=df["Zelena (kWh)"], label="Plava")
+ax.bar(
+    df["Mesec"],
+    df["Crvena (kWh)"],
+    bottom=df["Zelena (kWh)"] + df["Plava (kWh)"],
+    label="Crvena"
+)
+ax.set_ylabel("kWh")
+ax.legend()
+st.pyplot(fig)
+
+st.success("✅ V4.0 aktivna – vidiš realan EPS trošak po mesecima.")
