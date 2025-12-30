@@ -8,8 +8,8 @@ import base64
 st.set_page_config(page_title="Toplotna pumpa – PRO ANALIZA", layout="wide")
 st.title("🔥 Toplotna pumpa – Automatska Analiza (V5.2)")
 
-https://1drv.ms/x/c/a15c6fc067062efb/IQD5_1Yj9WhfRafvHJ1x3Y-wAYVUR7tP6_uTeZ3gnxYa9o4?e=nhMfy3
-onedrive_url = "https://1drv.ms/x/c/a15c6fc067062efb/IQD5_1Yj9WhfRafvHJ1x3Y-wAYVUR7tP6_uTeZ3gnxYa9o4?e=WDMEXv"
+# --- LINK SA NAVODNICIMA (FIXED) ---
+onedrive_url = "https://1drv.ms/x/c/a15c6fc067062efb/IQD5_1Yj9WhfRafvHJ1x3Y-wAYVUR7tP6_uTeZ3gnxYa9o4?e=r84SXd"
 
 def get_direct_download(url):
     try:
