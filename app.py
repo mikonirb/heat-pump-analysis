@@ -9,13 +9,14 @@ st.caption("Jedan unos • Više tabova • EPS • Spoljna temperatura • Proj
 # ================== JEDINSTVEN UNOS PODATAKA ==================
 data = {
     "Mesec": ["Novembar", "Decembar"],
-    "Proizvedena energija (kWh)": [3065, 4188],
-    "Potrošena struja (kWh)": [500, 1041],
-    "Rad kompresora (h)": [514, 606],
-    "Startovi kompresora": [1179, 402],
+    "Proizvedena energija (kWh)": [3065, 4432],
+    "Potrošena struja (kWh)": [500, 1201],
+    "Rad kompresora (h)": [514, 628],
+    "Rad pumpe (h)": [683, 678],
+    "Startovi kompresora": [1179, 418],
     "LWT (°C)": [32.4, 36.5],
     "Spoljna T (°C)": [8.0, 2.0],
-    "Dana u mesecu": [30, 31],
+    "Dana u mesecu": [30, 29],
 }
 
 df = pd.DataFrame(data)
@@ -29,8 +30,8 @@ df["kWh/dan"] = df["Potrošena struja (kWh)"] / df["Dana u mesecu"]
 df["Startova/dan"] = df["Startovi kompresora"] / df["Dana u mesecu"]
 
 # ================== TABOVI ==================
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["📊 Pregled sistema", "🌡 Spoljna T & kriva", "💡 EPS zone", "📅 Sezona"]
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["📊 Pregled sistema", "🌡 Spoljna T & kriva", "💡 EPS zone", "📅 Sezona", "OPTIMIZACIJA"]
 )
 
 # ----------------------------------------------------------------
@@ -173,3 +174,54 @@ with tab4:
 
 st.success("✅ V4.1 ALL-IN-ONE aktivna – sve objedinjeno u jednoj aplikaciji.")
 
+
+# =====================================================
+# TAB 5 – OPTIMIZACIJA (V5.0)
+# =====================================================
+with tab5:
+    st.subheader("1️⃣ Idealna kriva grejanja (konzervativna)")
+
+    # idealna kriva za radijatore (sigurna)
+    x = np.linspace(-10, 15, 50)
+    ideal_lwt = 38 - 0.2 * x  # konzervativna
+
+    fig, ax = plt.subplots()
+    ax.plot(data["Spoljna T (°C)"], data["LWT (°C)"], "o-", label="Tvoja kriva")
+    ax.plot(x, ideal_lwt, "--", label="Idealna kriva")
+    ax.set_xlabel("Spoljna T (°C)")
+    ax.set_ylabel("LWT (°C)")
+    ax.legend()
+    st.pyplot(fig)
+
+    st.subheader("2️⃣ LWT simulator uštede")
+
+    delta = st.slider("Smanjenje LWT (°C)", 0, 3, 1)
+    usteda_pct = delta * 0.03  # 3% po °C (konzervativno)
+    usteda_kwh = sezona * usteda_pct
+
+    st.metric("Potencijalna ušteda (kWh/sezona)", int(usteda_kwh))
+    st.metric("Ušteda (RSD)", int(usteda_kwh * cena))
+
+    st.subheader("3️⃣ EPS pametni alarm")
+
+    dnevno = data["kWh/dan"].mean()
+    mesecna_proj = dnevno * 30
+
+    if mesecna_proj > 1600:
+        st.error("⚠️ Ulazak u CRVENU zonu!")
+    elif mesecna_proj > 1200:
+        st.warning("🟡 Blizu PLAVE zone")
+    else:
+        st.success("🟢 Bezbedno u ZELENOJ zoni")
+
+    st.subheader("4️⃣ Comfort Index")
+
+    startovi = data["Startovi/dan"].mean()
+    comfort = max(60, 100 - startovi * 0.8)
+
+    st.metric("Comfort Index", f"{int(comfort)} / 100")
+
+    if comfort > 85:
+        st.success("Komfor stabilan – postoji prostor za optimizaciju.")
+    else:
+        st.warning("Smanjenje LWT nije preporučeno.")
