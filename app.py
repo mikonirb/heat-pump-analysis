@@ -9,7 +9,7 @@ st.set_page_config(page_title="Toplotna pumpa – PRO ANALIZA", layout="wide")
 st.title("🔥 Toplotna pumpa – Analiza (V5.3)")
 
 # TVOJ LINK - Očišćen od dodatnih parametara radi stabilnosti
-raw_url = "https://1drv.ms/x/c/a15c6fc067062efb/IQD5_1Yj9WhfRafvHJ1x3Y-wAYVUR7tP6_uTeZ3gnxYa9o4?e=T6GbOQ"
+raw_url = "https://1drv.ms/x/c/a15c6fc067062efb/IQD5_1Yj9WhfRafvHJ1x3Y-wAYVUR7tP6_uTeZ3gnxYa9o4"
 
 def get_direct_download(url):
     try:
