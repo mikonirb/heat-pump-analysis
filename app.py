@@ -8,7 +8,7 @@ import base64
 st.set_page_config(page_title="Toplotna pumpa – PRO ANALIZA", layout="wide")
 st.title("🔥 Toplotna pumpa – Automatska Analiza (V5.1)")
 
-https://1drv.ms/x/c/a15c6fc067062efb/IQD5_1Yj9WhfRafvHJ1x3Y-wAYVUR7tP6_uTeZ3gnxYa9o4?e=WDMEXv
+onedrive_share_url = "https://1drv.ms/x/c/a15c6fc067062efb/IQD5_1Yj9WhfRafvHJ1x3Y-wAYVUR7tP6_uTeZ3gnxYa9o4?e=WDMEXv"
 # Mora biti unutar navodnika: "link"
 onedrive_share_url = "ZALEPI_OVDE_SVOJ_LINK_IZ_ONEDRIVEA" 
 
