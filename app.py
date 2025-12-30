@@ -138,6 +138,9 @@ if df_raw is not None:
                 st.metric("Trošak", f"{int(t_gas)} RSD")
                 st.write(f"Ušteda: **{int(t_gas - racun_tp)} RSD**")
 
+    st.divider()
+            st.info("Obračun koristi prosečne energetske vrednosti: Drva ~1400kWh/m3, Pelet ~4.8kWh/kg, Gas ~9.5kWh/m3.")
+
     except Exception as e:
         st.error(f"⚠️ Došlo je do greške u kolonama: {e}")
         st.write("Sistem u tabeli vidi ove kolone:", list(df_raw.columns))
