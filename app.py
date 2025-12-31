@@ -86,10 +86,21 @@ if df_raw is not None:
             fig3, ax3 = plt.subplots()
             ax3.scatter(df["Spoljna T (°C)"], df["LWT (°C)"], color="red", s=100, label="Realne tačke")
             tx = np.linspace(df["Spoljna T (°C)"].min()-2, df["Spoljna T (°C)"].max()+2, 10)
-            ty = 38 - 0.4 * tx
+           # Konzervativna idealna kriva za radijatore
+            ty = 40 - 0.25 * tx
             ax3.plot(tx, ty, "--", color="gray", label="Referentna kriva")
             ax3.set_xlabel("Spoljna T"); ax3.set_ylabel("LWT"); ax3.legend()
             st.pyplot(fig3); plt.close(fig3)
+            odstupanje = df["LWT (°C)"] - (40 - 0.25 * df["Spoljna T (°C)"])
+            prosek_odstupanja = odstupanje.mean()
+
+            if prosek_odstupanja > 1.5:
+                st.warning("🔺 LWT je u proseku previsok – postoji prostor za smanjenje.")
+            elif prosek_odstupanja < -1:
+                st.info("🔹 LWT je niži od idealnog – sistem je već optimizovan.")
+            else:
+                st.success("✅ Kriva grejanja je blizu optimalne.")
+
 
         with tab3:
             st.subheader("💡 EPS i Troškovi")
@@ -98,16 +109,55 @@ if df_raw is not None:
             st.metric("Ukupan račun za struju", f"{int(racun_tp)} RSD")
             st.bar_chart(df, x="Mesec", y="Potrošena struja (kWh)")
 
+            mesecna_proj = prosek_dan * 30
+
+            st.subheader("🚦 EPS status (projekcija)")
+
+            if mesecna_proj > 1200:
+                st.error("🔴 Projekcija ulazi u CRVENU zonu")
+            elif mesecna_proj > 1000:
+                st.warning("🟡 Blizu PLAVE zone")
+            else:
+                st.success("🟢 Zelena zona – bezbedno")
+
+
         with tab4:
             st.subheader("📅 Projekcija sezone")
             dani_sezone = st.number_input("Trajanje sezone (dana)", value=180)
             st.metric("Predviđena potrošnja (kWh)", f"{int(prosek_dan * dani_sezone)}")
 
         with tab5:
-            st.subheader("🚀 Simulator optimizacije")
-            smanjenje = st.slider("Smanji LWT za (°C)", 0, 5, 1)
-            usteda = prosek_dan * dani_sezone * (smanjenje * 0.03)
-            st.metric("Potencijalna ušteda", f"{int(usteda)} kWh")
+            st.subheader("🚀 Optimizacija rada (V5.x PRO)")
+
+            smanjenje = st.slider("Smanjenje LWT (°C)", 0, 5, 1)
+            faktor = smanjenje * 0.03  # 3% po °C – konzervativno
+
+            nova_dnevna = prosek_dan * (1 - faktor)
+            nova_sezona = nova_dnevna * dani_sezone
+            usteda_kwh = prosek_dan * dani_sezone - nova_sezona
+
+            st.metric("Nova procenjena potrošnja (kWh/sezona)", int(nova_sezona))
+            st.metric("Ušteda energije (kWh)", int(usteda_kwh))
+            st.metric("Ušteda u dinarima", int(usteda_kwh * cena))
+
+            if smanjenje >= 3:
+                st.warning("⚠️ Smanjenje ≥3°C – proveri komfor u najhladnijim danima.")
+            else:
+                st.success("✅ Smanjenje je u bezbednoj zoni.")
+            st.subheader("🛋 Comfort Index")
+
+            startovi_dan = df["Startovi"].sum() / df["Dana u mesecu"].sum()
+            comfort = max(60, 100 - startovi_dan * 0.7)
+
+            st.metric("Comfort Index", f"{int(comfort)} / 100")
+
+            if comfort > 85:
+                st.success("Komfor vrlo stabilan – optimizacija bez rizika.")
+            elif comfort > 75:
+                st.info("Komfor dobar – male korekcije su moguće.")
+            else:
+                st.warning("Komfor na granici – ne preporučuje se dalje smanjenje LWT.")
+
 
         with tab6:
             st.subheader("❄️ Analiza otapanja (Defrost)")
@@ -138,8 +188,8 @@ if df_raw is not None:
                 st.metric("Trošak", f"{int(t_gas)} RSD")
                 st.write(f"Ušteda: **{int(t_gas - racun_tp)} RSD**")
 
-        st.divider()
-        st.info("Obračun koristi prosečne energetske vrednosti: Drva ~1400kWh/m3, Pelet ~4.8kWh/kg, Gas ~9.5kWh/m3.")
+                st.divider()
+                st.info("Obračun koristi prosečne energetske vrednosti: Drva ~1400kWh/m3, Pelet ~4.8kWh/kg, Gas ~9.5kWh/m3.")
 
     except Exception as e:
         st.error(f"⚠️ Došlo je do greške u kolonama: {e}")
