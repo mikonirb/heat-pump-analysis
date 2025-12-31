@@ -23,11 +23,15 @@ if not HAS_MATPLOTLIB:
 st.title("🔥 Toplotna pumpa – Kompletna Analiza Daikin EBLQ16")
 
 # --- NOVI PRISTUP (Direktno čitanje taba Potrosnja) ---
-# Zameni "TVOJ_ID_TABELE" sa onim dugačkim kodom iz URL-a tvoje Google tabele
-SHEET_ID = "1NGaf83t82G9tjsL_5wsvYNYvKii8A0biUXJkzsm9Bf8" # Ubaci ID tvoje Google tabele (baze)
+# --- PROVERENI LINK FORMAT ---
+SHEET_ID = "1NGaf83t82G9tjsL_5wsvYNYvKii8A0biUXJkzsm9Bf8"  # Ubaci ID tvoje Google tabele
 SHEET_NAME = "Potrosnja"
-gsheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
 
+# Ovaj link direktno izvozi tab u CSV format
+gsheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=344695767"
+
+# NAPOMENA: Ako "Potrosnja" nije prvi tab u tabeli, moramo naći njegov GID.
+# GID vidiš u URL-u brauzera kada klikneš na taj tab (piše na kraju: gid=123456)
 @st.cache_data(ttl=60)
 def load_data(url):
     try:
