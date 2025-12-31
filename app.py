@@ -47,6 +47,11 @@ if df_raw is not None:
     try:
         df = df_raw.copy()
         df.columns = [str(c).strip() for c in df.columns]
+        # Normalizacija naziva kolona
+        df = df.rename(columns={
+            "Startovi kompresora": "Startovi"
+        })
+
         
         # Sređivanje brojeva (zarezi u tačke)
         for col in df.columns:
