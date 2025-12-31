@@ -20,17 +20,19 @@ if not HAS_MATPLOTLIB:
     st.info("Sistem instalira grafičke module. Osvežite stranicu za 1 minut.")
     st.stop()
 
-st.title("🔥 Toplotna pumpa – Kompletna Analiza (V5.9)")
+st.title("🔥 Toplotna pumpa – Kompletna Analiza Daikin EBLQ16")
 
-# --- LINK KA GOOGLE SHEETS (PUBLISHED AS EXCEL) ---
-# Ovde zalepi link koji si dobio preko "Publish to web"
-gsheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQHYTvxs0PVenFOa59SezJzHDheIswLZoWzFtotG8N8rpdy7ESgHFIYY_R0Bqr9FA/pub?output=xlsx"
+# --- NOVI PRISTUP (Direktno čitanje taba Potrosnja) ---
+# Zameni "TVOJ_ID_TABELE" sa onim dugačkim kodom iz URL-a tvoje Google tabele
+SHEET_ID = "1NGaf83t82G9tjsL_5wsvYNYvKii8A0biUXJkzsm9Bf8" # Ubaci ID tvoje Google tabele (baze)
+SHEET_NAME = "Potrosnja"
+gsheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
 
 @st.cache_data(ttl=60)
 def load_data(url):
     try:
-        # Čitamo direktno sa Google Sheets linka koji glumi Excel fajl
-        df = pd.read_excel(url, engine='openpyxl')
+        # Čitamo kao CSV jer je brže i pouzdanije za Streamlit
+        df = pd.read_csv(url)
         return df
     except Exception as e:
         st.error(f"Greška pri povlačenju podataka: {e}")
