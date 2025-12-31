@@ -97,11 +97,13 @@ if df_raw is not None:
         st.success("✅ Podaci uspešno učitani!")
 
         # 3. SVIH 7 TABOVA
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
             "📊 Pregled", "🌡 Kriva", "💡 EPS", "📅 Sezona",
             "🚀 OPTIMIZACIJA", "❄️ DEFROST", "💰 POREĐENJE",
-            "🧠 SMART PREPORUKA", "🌦 PROGNOZA"
+            "📈 DNEVNA PROGNOZA"
         ])
+
+
 
 
         with tab1:
@@ -226,43 +228,61 @@ if df_raw is not None:
 
                 st.divider()
                 st.info("Obračun koristi prosečne energetske vrednosti: Drva ~1400kWh/m3, Pelet ~4.8kWh/kg, Gas ~9.5kWh/m3.")
-
+                
+            from datetime import date, timedelta
+            
             with tab8:
-                st.subheader("🧠 Automatska optimizacija krive (V6.0)")
+                st.subheader("📈 Prognoza dnevne potrošnje i EPS prag")
             
-                # odstupanje od idealne krive
-                ideal_lwt = 40 - 0.25 * df["Spoljna T (°C)"]
-                odstupanje = df["LWT (°C)"] - ideal_lwt
-                avg_offset = odstupanje.mean()
+                # Ulazi
+                danas = st.date_input("Današnji datum", value=date.today())
+                prag_eps = 1000
             
-                # comfort index (isti kao ranije)
-                startovi_dan = df["Startovi"].sum() / df["Dana u mesecu"].sum()
-                comfort = max(60, 100 - startovi_dan * 0.7)
+                trenutno = df["Potrošena struja (kWh)"].sum()
+                dani_protekli = df["Dana u mesecu"].sum()
+                prosek_dan = trenutno / dani_protekli
             
-                # logika preporuke
-                if comfort < 80:
-                    predlog = 0
-                    razlog = "Komfor na granici – optimizacija se ne preporučuje."
-                    rizik = "VISOK"
-                elif avg_offset > 1.5:
-                    predlog = min(1.5, avg_offset * 0.5)
-                    razlog = "LWT je iznad idealne krive."
-                    rizik = "NIZAK"
+                dani_u_mesecu = st.number_input(
+                    "Ukupan broj dana u ovom mesecu",
+                    value=30,
+                    min_value=28,
+                    max_value=31
+                )
+            
+                # Prognoze
+                prognoza_mesec = prosek_dan * dani_u_mesecu
+                preostalo = prag_eps - trenutno
+                dani_do_praga = preostalo / prosek_dan if preostalo > 0 else 0
+                datum_praga = danas + timedelta(days=int(dani_do_praga))
+            
+                # Prikaz
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Trenutno potrošeno", f"{int(trenutno)} kWh")
+                c2.metric("Prosek dnevno", f"{prosek_dan:.1f} kWh/dan")
+                c3.metric("Prognoza mesec", f"{int(prognoza_mesec)} kWh")
+            
+                st.divider()
+            
+                if trenutno >= prag_eps:
+                    st.error("🚨 CRVENA ZONA JE VEĆ PREĐENA!")
+                    st.markdown("👉 **ODMAH prebaciti potrošnju na drugo brojilo**")
+                elif dani_do_praga <= 3:
+                    st.warning(
+                        f"⚠️ Prag od 1000 kWh dostižeš oko **{datum_praga.strftime('%d.%m.%Y')}**"
+                    )
+                    st.markdown("👉 **Prebaci potrošnju u naredna 24h**")
                 else:
-                    predlog = 0
-                    razlog = "Kriva je već blizu optimalne."
-                    rizik = "NIZAK"
+                    st.success(
+                        f"✅ Prag od 1000 kWh dostižeš oko **{datum_praga.strftime('%d.%m.%Y')}**"
+                    )
+                    st.markdown("👉 Još si u zelenoj/plavoj zoni")
             
-                st.metric("Predložena korekcija krive", f"−{predlog:.1f} °C")
-                st.write(f"**Razlog:** {razlog}")
-                st.write(f"**Rizik po komfor:** {rizik}")
+                st.info(
+                    "Procena se zasniva na realnom proseku potrošnje iz ovog meseca "
+                    "i automatski se prilagođava kako dodaješ nove dane."
+                )
+
             
-                if predlog > 0:
-                    usteda_pct = predlog * 0.03
-                    usteda_kwh = ukupna_struja * usteda_pct
-                    st.success(f"Očekivana ušteda: ~{int(usteda_kwh)} kWh po sezoni")
-                else:
-                    st.info("Nema preporučene korekcije u ovom trenutku.")
             with tab9:
                 st.subheader("🌦 Vremenska prognoza i preporučeni LWT (V6.1)")
             
