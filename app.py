@@ -97,10 +97,10 @@ if df_raw is not None:
         st.success("✅ Podaci uspešno učitani!")
 
         # 3. SVIH 7 TABOVA
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
             "📊 Pregled", "🌡 Kriva", "💡 EPS", "📅 Sezona",
             "🚀 OPTIMIZACIJA", "❄️ DEFROST", "💰 POREĐENJE",
-            "📈 DNEVNA PROGNOZA"
+            "📈 DNEVNA PROGNOZA", "🌦 Vremenska prognoza i preporučeni LWT"
         ])
 
 
