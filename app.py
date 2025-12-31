@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import base64
+import requests
+
 
 # Pokušaj uvoza matplotlib-a
 try:
@@ -33,6 +35,27 @@ def load_data(url):
     except Exception as e:
         st.error(f"Greška pri povlačenju podataka: {e}")
         return None
+@st.cache_data(ttl=3600)
+def get_weather_forecast(lat, lon):
+    url = (
+        "https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}"
+        "&daily=temperature_2m_min,temperature_2m_max"
+        "&forecast_days=7&timezone=auto"
+    )
+    r = requests.get(url, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    
+    df_w = pd.DataFrame({
+        "Dan": data["daily"]["time"],
+        "T_min (°C)": data["daily"]["temperature_2m_min"],
+        "T_max (°C)": data["daily"]["temperature_2m_max"]
+    })
+    
+    df_w["Spoljna T (°C)"] = (df_w["T_min (°C)"] + df_w["T_max (°C)"]) / 2
+    return df_w
+
 
 # 2. OBRADA PODATAKA
 df_raw = load_data(gsheet_url)
@@ -40,6 +63,11 @@ df_raw = load_data(gsheet_url)
 # Ako Google link ne radi, dajemo opciju ručnog uploada kao rezervu
 st.sidebar.header("📁 Izvor podataka")
 uploaded_file = st.sidebar.file_uploader("Ili učitaj Excel ručno", type=["xlsx"])
+
+st.sidebar.header("📍 Lokacija (za prognozu)")
+lat = st.sidebar.number_input("Geografska širina", value=43.3)
+lon = st.sidebar.number_input("Geografska dužina", value=21.9)
+
 if uploaded_file:
     df_raw = pd.read_excel(uploaded_file, engine='openpyxl')
 
@@ -236,27 +264,44 @@ if df_raw is not None:
                 else:
                     st.info("Nema preporučene korekcije u ovom trenutku.")
             with tab9:
-                st.subheader("🌦 Prognoza vremena i preporučeni LWT")
+                st.subheader("🌦 Vremenska prognoza i preporučeni LWT (V6.1)")
             
-                st.info("Unesi prognozirane spoljne temperature za naredne dane.")
+                try:
+                    prog = get_weather_forecast(lat, lon)
             
-                prognoza = st.data_editor(
-                    pd.DataFrame({
-                        "Dan": ["D+1", "D+2", "D+3", "D+4", "D+5"],
-                        "Spoljna T (°C)": [5, 4, 3, 2, 1]
-                    }),
-                    use_container_width=True
-                )
+                    # konzervativna kriva
+                    prog["Preporučeni LWT (°C)"] = 40 - 0.25 * prog["Spoljna T (°C)"]
             
-                prognoza["Preporučeni LWT (°C)"] = 40 - 0.25 * prognoza["Spoljna T (°C)"]
+                    st.dataframe(prog.round(1), use_container_width=True)
             
-                st.dataframe(prognoza.round(1), use_container_width=True)
+                    # grafikon
+                    fig, ax = plt.subplots()
+                    ax.plot(prog["Dan"], prog["Preporučeni LWT (°C)"], marker="o")
+                    ax.set_ylabel("LWT (°C)")
+                    ax.set_title("Preporučeni LWT za narednih 7 dana")
+                    ax.grid(True)
+                    st.pyplot(fig); plt.close(fig)
             
-                # upozorenje za defrost
-                if (prognoza["Spoljna T (°C)"] < 2).any():
-                    st.warning("❄️ Najavljene temperature ispod 2 °C – mogući češći defrosti.")
-                else:
-                    st.success("✅ Nema povećanog rizika od defrosta.")
+                    # defrost upozorenje
+                    if (prog["T_min (°C)"] < 2).any():
+                        st.warning("❄️ Najavljene minimalne temperature ispod 2 °C – mogući češći defrosti.")
+                    else:
+                        st.success("✅ Nema povećanog rizika od defrosta.")
+            
+                except Exception as e:
+                    st.error("Nije moguće učitati prognozu – koristi ručni unos.")
+                    st.write(e)
+            
+                    # fallback – ručni unos
+                    fallback = st.data_editor(
+                        pd.DataFrame({
+                            "Dan": ["D+1", "D+2", "D+3"],
+                            "Spoljna T (°C)": [5, 4, 3]
+                        }),
+                        use_container_width=True
+                    )
+                    fallback["Preporučeni LWT (°C)"] = 40 - 0.25 * fallback["Spoljna T (°C)"]
+                    st.dataframe(fallback.round(1), use_container_width=True)
 
 
     
