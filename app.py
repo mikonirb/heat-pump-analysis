@@ -89,6 +89,8 @@ if df_raw is not None:
         # KALKULACIJE
         df["COP"] = df["Proizvedena energija (kWh)"] / df["Potrošena struja (kWh)"]
         df["kWh/dan"] = df["Potrošena struja (kWh)"] / df["Dana u mesecu"]
+        df["Rad Komp %"] = (df["Rad kompresora (h)"] / df["Rad pumpe (h)"]) * 100
+        df["Snaga (kW)"] = df["Proizvedena energija (kWh)"] / df["Rad kompresora (h)"]
         
         ukupna_proizvedena = df["Proizvedena energija (kWh)"].sum()
         ukupna_struja = df["Potrošena struja (kWh)"].sum()
@@ -108,6 +110,19 @@ if df_raw is not None:
 
         with tab1:
             st.subheader("📊 Mesečni izveštaj")
+
+            # Uzimamo poslednji red iz tabele (npr. Decembar)
+            poslednji_red = df.iloc[-1]
+            
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Opterećenje (Komp/Pumpa)", f"{poslednji_red['Rad Komp %']:.1f} %")
+            m2.metric("Prosečna Snaga", f"{poslednji_red['Snaga (kW)']:.2f} kW")
+            m3.metric("Trenutni COP", f"{poslednji_red['COP']:.2f}")
+            
+            st.divider()
+            st.subheader("📊 Mesečni izveštaj")
+            st.dataframe(df.round(2), use_container_width=True)
+                    
             st.dataframe(df.round(2), use_container_width=True)
             c1, c2 = st.columns(2)
             with c1:
