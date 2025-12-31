@@ -231,56 +231,68 @@ if df_raw is not None:
                 
             from datetime import date, timedelta
             
-            with tab8:
-                st.subheader("📈 Prognoza dnevne potrošnje i EPS prag")
-            
-                # Ulazi
-                danas = st.date_input("Današnji datum", value=date.today())
-                prag_eps = 1000
-            
-                trenutno = df["Potrošena struja (kWh)"].sum()
-                dani_protekli = df["Dana u mesecu"].sum()
-                prosek_dan = trenutno / dani_protekli
-            
-                dani_u_mesecu = st.number_input(
-                    "Ukupan broj dana u ovom mesecu",
-                    value=30,
-                    min_value=28,
-                    max_value=31
+
+        with tab8:
+            st.subheader("📈 Prognoza potrošnje – EPS prag (po mesecu)")
+        
+            # Izbor meseca
+            meseci = df["Mesec"].astype(str).unique().tolist()
+            izabrani_mesec = st.selectbox("Izaberi mesec", meseci, index=len(meseci)-1)
+        
+            df_m = df[df["Mesec"].astype(str) == izabrani_mesec]
+        
+            if df_m.empty:
+                st.error("Nema podataka za izabrani mesec.")
+                st.stop()
+        
+            # Ulazi
+            danas = st.date_input("Današnji datum", value=date.today())
+            prag_eps = 1000
+        
+            potroseno = float(df_m["Potrošena struja (kWh)"].iloc[0])
+            dani_u_mesecu = int(df_m["Dana u mesecu"].iloc[0])
+        
+            dani_protekli = st.number_input(
+                "Koliko je dana već prošlo u mesecu",
+                min_value=1,
+                max_value=dani_u_mesecu,
+                value=min(date.today().day, dani_u_mesecu)
+            )
+        
+            # Računi
+            prosek_dan = potroseno / dani_protekli
+            prognoza_mesec = prosek_dan * dani_u_mesecu
+        
+            preostalo = prag_eps - potroseno
+            dani_do_praga = preostalo / prosek_dan if preostalo > 0 else 0
+            datum_praga = danas + timedelta(days=int(dani_do_praga))
+        
+            # Prikaz
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Potrošeno (ovaj mesec)", f"{int(potroseno)} kWh")
+            c2.metric("Prosek dnevno", f"{prosek_dan:.1f} kWh/dan")
+            c3.metric("Prognoza meseca", f"{int(prognoza_mesec)} kWh")
+        
+            st.divider()
+        
+            if potroseno >= prag_eps:
+                st.error("🚨 CRVENA ZONA JE VEĆ PREĐENA")
+                st.markdown("👉 **ODMAH prebaci potrošnju na drugo brojilo**")
+            elif dani_do_praga <= 3:
+                st.warning(
+                    f"⚠️ Prag od 1000 kWh dostižeš oko **{datum_praga.strftime('%d.%m.%Y')}**"
                 )
-            
-                # Prognoze
-                prognoza_mesec = prosek_dan * dani_u_mesecu
-                preostalo = prag_eps - trenutno
-                dani_do_praga = preostalo / prosek_dan if preostalo > 0 else 0
-                datum_praga = danas + timedelta(days=int(dani_do_praga))
-            
-                # Prikaz
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Trenutno potrošeno", f"{int(trenutno)} kWh")
-                c2.metric("Prosek dnevno", f"{prosek_dan:.1f} kWh/dan")
-                c3.metric("Prognoza mesec", f"{int(prognoza_mesec)} kWh")
-            
-                st.divider()
-            
-                if trenutno >= prag_eps:
-                    st.error("🚨 CRVENA ZONA JE VEĆ PREĐENA!")
-                    st.markdown("👉 **ODMAH prebaciti potrošnju na drugo brojilo**")
-                elif dani_do_praga <= 3:
-                    st.warning(
-                        f"⚠️ Prag od 1000 kWh dostižeš oko **{datum_praga.strftime('%d.%m.%Y')}**"
-                    )
-                    st.markdown("👉 **Prebaci potrošnju u naredna 24h**")
-                else:
-                    st.success(
-                        f"✅ Prag od 1000 kWh dostižeš oko **{datum_praga.strftime('%d.%m.%Y')}**"
-                    )
-                    st.markdown("👉 Još si u zelenoj/plavoj zoni")
-            
-                st.info(
-                    "Procena se zasniva na realnom proseku potrošnje iz ovog meseca "
-                    "i automatski se prilagođava kako dodaješ nove dane."
+                st.markdown("👉 **Preporuka: prebaci u naredna 24h**")
+            else:
+                st.success(
+                    f"✅ Prag od 1000 kWh dostižeš oko **{datum_praga.strftime('%d.%m.%Y')}**"
                 )
+        
+            st.info(
+                "Računica se vrši isključivo za izabrani mesec (kolona Mesec iz Google Sheets). "
+                "Bez mešanja istorijskih podataka."
+            )
+
 
             
             with tab9:
