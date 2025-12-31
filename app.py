@@ -112,41 +112,41 @@ if df_raw is not None:
         ])
 
         with tab1:
-        st.subheader("📊 Mesečni izveštaj")
-    
-        # Uzimamo poslednji red iz tabele (npr. Decembar)
-        # df.tail(1) osigurava da uzmemo baš poslednji upisan red
-        poslednji_red = df.iloc[-1]
+            st.subheader("📊 Mesečni izveštaj")
         
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Opterećenje (Komp/Pumpa)", f"{poslednji_red['Rad Komp %']:.1f} %")
-        m2.metric("Prosečna Snaga", f"{poslednji_red['Snaga (kW)']:.2f} kW")
-        m3.metric("Trenutni COP", f"{poslednji_red['COP']:.2f}")
+            # Uzimamo poslednji red iz tabele (npr. Decembar)
+            # df.tail(1) osigurava da uzmemo baš poslednji upisan red
+            poslednji_red = df.iloc[-1]
+            
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Opterećenje (Komp/Pumpa)", f"{poslednji_red['Rad Komp %']:.1f} %")
+            m2.metric("Prosečna Snaga", f"{poslednji_red['Snaga (kW)']:.2f} kW")
+            m3.metric("Trenutni COP", f"{poslednji_red['COP']:.2f}")
+            
+            st.divider()
         
-        st.divider()
-    
-        # Tabela sa podacima - prikazujemo je samo JEDNOM
-        st.write("### 📋 Pregled podataka")
-        st.dataframe(df.round(2), use_container_width=True)
+            # Tabela sa podacima - prikazujemo je samo JEDNOM
+            st.write("### 📋 Pregled podataka")
+            st.dataframe(df.round(2), use_container_width=True)
+            
+            st.divider()
         
-        st.divider()
-    
-        # Grafikoni
-        c1, c2 = st.columns(2)
-        with c1:
-            fig1, ax1 = plt.subplots()
-            ax1.bar(df["Mesec"], df["kWh/dan"], color="skyblue")
-            ax1.set_title("Potrošnja (kWh/dan)")
-            st.pyplot(fig1)
-            plt.close(fig1)
-        
-        with c2:
-            fig2, ax2 = plt.subplots()
-            ax2.plot(df["Mesec"], df["COP"], marker="o", color="green")
-            ax2.set_title("Efikasnost (COP)")
-            ax2.grid(True)
-            st.pyplot(fig2)
-            plt.close(fig2)
+            # Grafikoni
+            c1, c2 = st.columns(2)
+            with c1:
+                fig1, ax1 = plt.subplots()
+                ax1.bar(df["Mesec"], df["kWh/dan"], color="skyblue")
+                ax1.set_title("Potrošnja (kWh/dan)")
+                st.pyplot(fig1)
+                plt.close(fig1)
+            
+            with c2:
+                fig2, ax2 = plt.subplots()
+                ax2.plot(df["Mesec"], df["COP"], marker="o", color="green")
+                ax2.set_title("Efikasnost (COP)")
+                ax2.grid(True)
+                st.pyplot(fig2)
+                plt.close(fig2)
             
         with tab2:
             st.subheader("🌡 Analiza krive grejanja")
