@@ -69,9 +69,12 @@ if df_raw is not None:
         st.success("✅ Podaci uspešno učitani!")
 
         # 3. SVIH 7 TABOVA
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-            "📊 Pregled", "🌡 Kriva", "💡 EPS", "📅 Sezona", "🚀 OPTIMIZACIJA", "❄️ DEFROST", "💰 POREĐENJE"
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+            "📊 Pregled", "🌡 Kriva", "💡 EPS", "📅 Sezona",
+            "🚀 OPTIMIZACIJA", "❄️ DEFROST", "💰 POREĐENJE",
+            "🧠 SMART PREPORUKA", "🌦 PROGNOZA"
         ])
+
 
         with tab1:
             st.subheader("📊 Mesečni izveštaj")
@@ -182,7 +185,7 @@ if df_raw is not None:
                 st.write(f"Ušteda: **{int(t_drva - racun_tp)} RSD**")
             with c2:
                 st.markdown("### 🪵 Pelet")
-                cena_peleta = st.number_input("Cena peleta (din/kg)", value=32)
+                cena_peleta = st.number_input("Cena peleta (din/kg)", value=46)
                 t_peleta = (ukupna_proizvedena / 4.8) * cena_peleta
                 st.metric("Trošak", f"{int(t_peleta)} RSD")
                 st.write(f"Ušteda: **{int(t_peleta - racun_tp)} RSD**")
@@ -196,6 +199,67 @@ if df_raw is not None:
                 st.divider()
                 st.info("Obračun koristi prosečne energetske vrednosti: Drva ~1400kWh/m3, Pelet ~4.8kWh/kg, Gas ~9.5kWh/m3.")
 
+            with tab8:
+                st.subheader("🧠 Automatska optimizacija krive (V6.0)")
+            
+                # odstupanje od idealne krive
+                ideal_lwt = 40 - 0.25 * df["Spoljna T (°C)"]
+                odstupanje = df["LWT (°C)"] - ideal_lwt
+                avg_offset = odstupanje.mean()
+            
+                # comfort index (isti kao ranije)
+                startovi_dan = df["Startovi"].sum() / df["Dana u mesecu"].sum()
+                comfort = max(60, 100 - startovi_dan * 0.7)
+            
+                # logika preporuke
+                if comfort < 80:
+                    predlog = 0
+                    razlog = "Komfor na granici – optimizacija se ne preporučuje."
+                    rizik = "VISOK"
+                elif avg_offset > 1.5:
+                    predlog = min(1.5, avg_offset * 0.5)
+                    razlog = "LWT je iznad idealne krive."
+                    rizik = "NIZAK"
+                else:
+                    predlog = 0
+                    razlog = "Kriva je već blizu optimalne."
+                    rizik = "NIZAK"
+            
+                st.metric("Predložena korekcija krive", f"−{predlog:.1f} °C")
+                st.write(f"**Razlog:** {razlog}")
+                st.write(f"**Rizik po komfor:** {rizik}")
+            
+                if predlog > 0:
+                    usteda_pct = predlog * 0.03
+                    usteda_kwh = ukupna_struja * usteda_pct
+                    st.success(f"Očekivana ušteda: ~{int(usteda_kwh)} kWh po sezoni")
+                else:
+                    st.info("Nema preporučene korekcije u ovom trenutku.")
+            with tab9:
+                st.subheader("🌦 Prognoza vremena i preporučeni LWT")
+            
+                st.info("Unesi prognozirane spoljne temperature za naredne dane.")
+            
+                prognoza = st.data_editor(
+                    pd.DataFrame({
+                        "Dan": ["D+1", "D+2", "D+3", "D+4", "D+5"],
+                        "Spoljna T (°C)": [5, 4, 3, 2, 1]
+                    }),
+                    use_container_width=True
+                )
+            
+                prognoza["Preporučeni LWT (°C)"] = 40 - 0.25 * prognoza["Spoljna T (°C)"]
+            
+                st.dataframe(prognoza.round(1), use_container_width=True)
+            
+                # upozorenje za defrost
+                if (prognoza["Spoljna T (°C)"] < 2).any():
+                    st.warning("❄️ Najavljene temperature ispod 2 °C – mogući češći defrosti.")
+                else:
+                    st.success("✅ Nema povećanog rizika od defrosta.")
+
+
+    
     except Exception as e:
         st.error(f"⚠️ Došlo je do greške u kolonama: {e}")
         st.write("Sistem u tabeli vidi ove kolone:", list(df_raw.columns))
