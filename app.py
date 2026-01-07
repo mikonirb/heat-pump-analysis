@@ -262,9 +262,9 @@ if df_raw is not None:
             
 
         with tab8:
-            st.subheader("📈 Detaljna prognoza mesečne potrošnje (EPS Prag)")
+            st.subheader("📈 Precizna prognoza potrošnje (EPS Prag)")
             
-            from datetime import date, timedelta
+            from datetime import date
             
             # Izbor meseca
             meseci = df["Mesec"].astype(str).unique().tolist()
@@ -278,49 +278,53 @@ if df_raw is not None:
                 c1, c2 = st.columns(2)
                 with c1:
                     dani_protekli = st.number_input(
-                        "Broj proteklih dana (uključujući i današnji):", 
+                        "Koliko je dana PROŠLO (uključujući danas):", 
                         min_value=1, max_value=dani_u_mesecu, 
                         value=min(date.today().day, dani_u_mesecu)
                     )
                 with c2:
-                    potroseno_do_danas = st.number_input(
-                        f"Ukupno potrošeno kWh od 1. u mesecu do danas:", 
-                        min_value=0.0, 
+                    stanje_kwh = st.number_input(
+                        "Koliko je kWh potrošeno OD PRVOG u mesecu do SAD:", 
+                        min_value=0.1, 
                         value=float(df_m["Potrošena struja (kWh)"].iloc[0])
                     )
 
-                # KLJUČNI PRORAČUNI
-                prosek_dan = potroseno_do_danas / dani_protekli
-                # UKUPNA PROGNOZA = ono što je već potrošeno + (prosek * preostali dani)
-                preostali_dani = dani_u_mesecu - dani_protekli
-                prognoza_ukupno_mesec = potroseno_do_danas + (prosek_dan * preostali_dani)
+                # --- MATEMATIKA ---
+                # 1. Dnevni prosek na osnovu unetog stanja i proteklih dana
+                dnevni_prosek = stanje_kwh / dani_protekli
                 
-                prag_eps = 1600 # Tvoj limit za plavu/crvenu zonu
+                # 2. PROGNOZA ZA KRAJ = prosek * ukupan broj dana u mesecu
+                prognoza_ukupno = dnevni_prosek * dani_u_mesecu
                 
-                st.divider()
+                # 3. Koliko će se još potrošiti od sutra do kraja meseca
+                preostalo_da_se_potrosi = prognoza_ukupno - stanje_kwh
                 
-                # PRIKAZ 3 KLJUČNE METRIKE
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Dnevni prosek", f"{prosek_dan:.1f} kWh/dan")
-                m2.metric("Potrošeno do danas", f"{int(potroseno_do_danas)} kWh")
-                m3.metric("PROGNOZA ZA KRAJ MESECA", f"{int(prognoza_ukupno_mesec)} kWh")
+                prag_eps = 1200 
 
                 st.divider()
 
-                # LOGIKA ZA UPOZORENJA
-                if prognoza_ukupno_mesec > prag_eps:
-                    razlika = prognoza_ukupno_mesec - prag_eps
-                    st.error(f"🚨 PROGNOZA PRELAZI PRAG: Bićete oko {int(razlika)} kWh iznad limita od {prag_eps} kWh!")
+                # PRIKAZ (Sada sa ispravnim kalkulacijama)
+                col1, col2, col3 = st.columns(3)
+                
+                col1.metric("Dnevni prosek", f"{dnevni_prosek:.2f} kWh/dan")
+                
+                col2.metric("Potrošeno do danas", f"{int(stanje_kwh)} kWh")
+                
+                # Ova cifra MORA biti veća od "Potrošeno do danas" ako mesec još traje
+                col3.metric("PROGNOZA NA KRAJU MESEC", f"{int(prognoza_ukupno)} kWh")
+
+                st.divider()
+
+                # LOGIKA UPOZORENJA
+                if prognoza_ukupno > prag_eps:
+                    prekoracenje = prognoza_ukupno - prag_eps
+                    st.error(f"🚨 ALARM: Prognoza ({int(prognoza_ukupno)} kWh) premašuje limit od {prag_eps} kWh za **{int(prekoracenje)} kWh**!")
                 else:
-                    ostalo_do_praga = prag_eps - prognoza_ukupno_mesec
-                    st.success(f"✅ SIGURNA ZONA: Prognoza je da ćete mesec završiti sa {int(prognoza_ukupno_mesec)} kWh (Rezerva: {int(ostalo_do_praga)} kWh).")
+                    st.success(f"✅ SIGURNO: Mesec ćete verovatno završiti sa **{int(prognoza_ukupno)} kWh**, što je ispod limita.")
                 
-                # DODATNA INFORMACIJA O DANIMA
-                if preostali_dani > 0:
-                    preostalo_potrosnja = prognoza_ukupno_mesec - potroseno_do_danas
-                    st.info(f"📅 Do kraja meseca je ostalo još {preostali_dani} dana. Procenjena potrošnja u tom periodu je {int(preostalo_potrosnja)} kWh.")
+                st.info(f"💡 Objašnjenje: Na osnovu vašeg proseka, potrošićete još oko **{int(preostalo_da_se_potrosi)} kWh** u preostalih **{dani_u_mesecu - dani_protekli}** dana meseca.")
             else:
-                st.error("Podaci za ovaj mesec nisu pronađeni.")
+                st.error("Nema podataka za ovaj mesec.")
             
             with tab9:
                 st.subheader("🌦 Vremenska prognoza i preporučeni LWT (V6.1)")
