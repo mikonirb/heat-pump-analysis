@@ -262,70 +262,50 @@ if df_raw is not None:
             
 
         with tab8:
-            st.subheader("📈 Automatska prognoza potrošnje (FIX V6.4)")
+            st.subheader("📈 Prognoza potrošnje na 30 dana (EPS Granica)")
             
             from datetime import date
             
-            # 1. Izbor meseca
+            # 1. Izbor meseca iz baze
             meseci = df["Mesec"].astype(str).unique().tolist()
             izabrani_mesec = st.selectbox("Izaberi mesec", meseci, index=len(meseci)-1)
             
-            # 2. Filtriranje reda
+            # 2. Podaci o potrošnji iz reda koji si izabrao
             red_iz_baze = df[df["Mesec"].astype(str) == izabrani_mesec].iloc[0]
+            trenutna_potrosnja = float(red_iz_baze["Potrošena struja (kWh)"])
             
-            # --- BRUTALNO FORSIRANJE MATEMATIKE ---
-            # Uzimamo vrednost očitane struje
-            trenutno_kwh = float(red_iz_baze["Potrošena struja (kWh)"])
+            # --- KLJUČNA MATEMATIKA ---
             
-            # Uzimamo broj dana u mesecu iz kolone I, ali imamo i "back-up" plan
-            try:
-                # Pokušavamo da pročitamo tvoju kolonu I
-                max_dana = int(red_iz_baze["Dana u mesecu"])
-            except:
-                # Ako ne uspe (npr. prazna ćelija), koristimo standard
-                meseci_standard = {"Januar": 31, "Februar": 28, "Mart": 31, "April": 30, "Maj": 31}
-                max_dana = meseci_standard.get(izabrani_mesec, 30)
-
-            # Određujemo koliko je dana prošlo (Danas je 7. januar)
-            danasnji_datum = date.today()
+            # Broj proteklih dana (Danas je 7. januar, dakle 7)
+            danasnji_dan = date.today().day
             
-            # Ako analiziramo trenutni mesec, delimo sa današnjim danom
-            if "Januar" in izabrani_mesec:
-                proslo_dana = danasnji_datum.day # Ovo je broj 7
-            else:
-                proslo_dana = max_dana # Za prošle mesece delimo sa svim danima
-
-            # --- MATEMATIKA KOJA SE NE MOŽE POGREŠITI ---
-            # Ako je danas 7. dan, a imamo 386kWh:
-            # Prosek = 386 / 7 = 55.14
-            prosek_po_danu = trenutno_kwh / proslo_dana
+            # Dnevni prosek (npr. 386 / 7 = 55.14)
+            dnevni_prosek = trenutna_potrosnja / danasnji_dan
             
-            # Prognoza = 55.14 * 31 (a ne * 7!)
-            konacna_prognoza = prosek_po_danu * max_dana
-
+            # PROGNOZA NA 30 DANA (Fiksno 30 dana kako si tražio)
+            prognoza_30_dana = dnevni_prosek * 30
+            
             # --- PRIKAZ ---
-            st.warning(f"Sistem deli sa **{proslo_dana}** dana, a množi sa **{max_dana}** dana.")
+            st.info(f"Obračun: {trenutna_potrosnja} kWh / {danasnji_dan} dana × 30 dana")
             
             col1, col2, col3 = st.columns(3)
             
-            # Kolona 1: 55.14
-            col1.metric("Dnevni prosek", f"{prosek_po_danu:.2f} kWh")
+            col1.metric("Dnevni prosek", f"{dnevni_prosek:.2f} kWh")
+            col2.metric("Potrošeno (7 dana)", f"{int(trenutna_potrosnja)} kWh")
             
-            # Kolona 2: 386
-            col2.metric("Očitano do danas", f"{int(trenutno_kwh)} kWh")
-            
-            # Kolona 3: MORA BITI 1709 (386 / 7 * 31)
-            col3.metric("PROGNOZA NA KRAJU", f"{int(konacna_prognoza)} kWh")
+            # Očekivani rezultat: (386 / 7) * 30 = 1654 kWh
+            col3.metric("PROGNOZA (30 DANA)", f"{int(prognoza_30_dana)} kWh")
 
             st.divider()
 
-            # Provera praga
-            prag_limit = 1200
-            if konacna_prognoza > prag_limit:
-                razlika = konacna_prognoza - prag_limit
-                st.error(f"🚨 ALARM: Sa ovim prosekom ideš na {int(konacna_prognoza)} kWh (Preko limita za {int(razlika)} kWh)!")
+            # PROVERA GRANICE OD 1200 kWh (Plava/Crvena zona)
+            granica = 1200
+            if prognoza_30_dana > granica:
+                razlika = prognoza_30_dana - granica
+                st.error(f"🚨 ALARM: Sa ovim prosekom prelaziš granicu od {granica} kWh!")
+                st.warning(f"Projektovana potrošnja je **{int(razlika)} kWh iznad** limita za plavu zonu.")
             else:
-                st.success(f"✅ STATUS: Očekivana potrošnja je unutar limita.")
+                st.success(f"✅ STATUS: Prognoza ({int(prognoza_30_dana)} kWh) je unutar granice od {granica} kWh.")
             
         with tab9:
             st.subheader("🌦 Vremenska prognoza i preporučeni LWT (V6.1)")
