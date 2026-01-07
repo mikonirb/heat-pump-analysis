@@ -262,75 +262,77 @@ if df_raw is not None:
             
 
             with tab8:
-                st.subheader("📈 Precizna prognoza potrošnje (EPS Prag)")
-                
-                from datetime import date
-                
-                # 1. Određivanje broja dana u mesecu (Januar=31, Februar=28, itd.)
-                # Koristimo direktan unos ili automatsku tabelu
-                meseci_podaci = {
-                    "Januar": 31, "Februar": 28, "Mart": 31, "April": 30, 
-                    "Maj": 31, "Juni": 30, "Juli": 31, "Avgust": 31, 
-                    "Septembar": 30, "Oktobar": 31, "Novembar": 30, "Decembar": 31
-                }
-    
-                meseci = df["Mesec"].astype(str).unique().tolist()
-                izabrani_mesec = st.selectbox("Izaberi mesec za analizu", meseci, index=len(meseci)-1)
-                
-                # Uzimamo broj dana za taj mesec
-                ukupno_dana_u_mesecu = meseci_podaci.get(izabrani_mesec, 30)
-    
-                c1, c2 = st.columns(2)
-                with c1:
-                    proteklo_dana = st.number_input(
-                        "Koliko je dana PROŠLO od 1. u mesecu (uključujući danas):", 
-                        min_value=1, max_value=ukupno_dana_u_mesecu, value=6
-                    )
-                with c2:
-                    trenutna_potrosnja = st.number_input(
-                        "Koliko je kWh potrošeno OD 1. u mesecu do SAD:", 
-                        min_value=1.0, value=319.0
-                    )
-    
-                # --- MATEMATIKA KOJA NE SME DA OMANE ---
-                
-                # 1. Pravi dnevni prosek
-                stvarno_prosek = trenutna_potrosnja / proteklo_dana
-                
-                # 2. PROGNOZA ZA KRAJ (Prosek x SVI dani u mesecu)
-                prognoza_za_kraj = stvarno_prosek * ukupno_dana_u_mesecu
-                
-                # 3. Koliko je ostalo da se potroši (Prognoza - Trenutno)
-                ostalo_da_se_potrosi = prognoza_za_kraj - trenutna_potrosnja
-                
-                # 4. Preostalo dana
-                preostalo_dana = ukupno_dana_u_mesecu - proteklo_dana
-    
-                st.divider()
-    
-                # PRIKAZ KOJI MORA BITI RAZLIČIT
-                col1, col2, col3 = st.columns(3)
-                
-                col1.metric("Dnevni prosek", f"{stvarno_prosek:.2f} kWh/dan")
-                
-                col2.metric("Potrošeno do danas", f"{int(trenutna_potrosnja)} kWh")
-                
-                # OVDE MORA BITI npr. 1648 kWh za Januar ako je prosek 53.17
-                col3.metric("PROGNOZA NA KRAJU MESEC", f"{int(prognoza_za_kraj)} kWh")
-    
-                st.divider()
-    
-                # LOGIKA UPOZORENJA (Prag 1600 kWh)
-                prag = 1600
-                if prognoza_za_kraj > prag:
-                    prekoracenje = prognoza_za_kraj - prag
-                    st.error(f"🚨 ALARM: Sa ovim prosekom završavaš mesec na {int(prognoza_za_kraj)} kWh!")
-                    st.warning(f"⚠️ To je {int(prekoracenje)} kWh IZNAD limita od {prag} kWh. Razmisli o štednji!")
-                else:
-                    st.success(f"✅ SIGURNO: Završićeš mesec na {int(prognoza_za_kraj)} kWh, što je unutar limita.")
-    
-                st.info(f"💡 Objašnjenje: Prošlo je {proteklo_dana} dana, ostalo je još {preostalo_dana} dana do kraja {izabrani_mesec.lower()}a. "
-                        f"U tom periodu ćeš potrošiti još oko {int(ostalo_da_se_potrosi)} kWh.")
+            st.subheader("📈 Dinamička prognoza iz baze podataka")
+            
+            from datetime import date
+            
+            # Rečnik dana u mesecu
+            meseci_podaci = {
+                "Januar": 31, "Februar": 28, "Mart": 31, "April": 30, 
+                "Maj": 31, "Juni": 30, "Juli": 31, "Avgust": 31, 
+                "Septembar": 30, "Oktobar": 31, "Novembar": 30, "Decembar": 31
+            }
+
+            meseci = df["Mesec"].astype(str).unique().tolist()
+            izabrani_mesec = st.selectbox("Izaberi mesec za analizu", meseci, index=len(meseci)-1)
+            
+            # Filtriramo red iz baze za taj mesec
+            red_iz_baze = df[df["Mesec"].astype(str) == izabrani_mesec].iloc[0]
+            
+            # --- POVLAČENJE IZ BAZE ---
+            # Ovde program uzima vrednost direktno iz tvoje kolone "Potrošena struja (kWh)"
+            potroseno_iz_baze = float(red_iz_baze["Potrošena struja (kWh)"])
+            ukupno_dana_u_mesecu = meseci_podaci.get(izabrani_mesec, 31)
+
+            # AUTOMATSKO ODREĐIVANJE PROTEKLIH DANA
+            # Ako je mesec u toku (npr. Januar), uzmi današnji datum. 
+            # Ako je mesec prošao, uzmi sve dane tog meseca.
+            danasnji_mesec_naziv = date.today().strftime("%B") # Daje npr. "January" na engleskom
+            # Prebacujemo na tvoj format ako je potrebno, ili jednostavno poredimo:
+            
+            if izabrani_mesec.lower() in date.today().strftime("%B").lower() or "Januar" in izabrani_mesec:
+                 default_dani = min(date.today().day, ukupno_dana_u_mesecu)
+            else:
+                 default_dani = ukupno_dana_u_mesecu
+
+            c1, c2 = st.columns(2)
+            with c1:
+                proteklo_dana = st.number_input(
+                    "Broj dana na koji se odnosi cifra iz baze:", 
+                    min_value=1, max_value=ukupno_dana_u_mesecu, 
+                    value=default_dani
+                )
+            with c2:
+                # Sada je 'value' povezan sa bazom podataka!
+                stanje_kwh = st.number_input(
+                    "Trenutna potrošnja povučena iz baze (kWh):", 
+                    min_value=0.1, 
+                    value=potroseno_iz_baze
+                )
+
+            # --- MATEMATIKA ---
+            dnevni_prosek = stanje_kwh / proteklo_dana
+            prognoza_za_kraj = dnevni_prosek * ukupno_dana_u_mesecu
+            preostalo_dana = ukupno_dana_u_mesecu - proteklo_dana
+
+            st.divider()
+
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Dnevni prosek", f"{dnevni_prosek:.2f} kWh/dan")
+            col2.metric("Trenutno u bazi", f"{int(stanje_kwh)} kWh")
+            col3.metric("PROGNOZA (KRAJ MESECA)", f"{int(prognoza_za_kraj)} kWh")
+
+            st.divider()
+
+            prag = 1200
+            if prognoza_za_kraj > prag:
+                prekoracenje = prognoza_za_kraj - prag
+                st.error(f"🚨 ALARM: Prognoza ({int(prognoza_za_kraj)} kWh) je iznad limita!")
+                st.warning(f"⚠️ Bićeš u prekoručenju za **{int(prekoracenje)} kWh** ako nastaviš ovako.")
+            else:
+                st.success(f"✅ Pod kontrolom: Prognoza je unutar limita od {prag} kWh.")
+            
+            st.info(f"💡 Info: Podaci se odnose na mesec {izabrani_mesec}. Baza kaže da si do sada potrošio {stanje_kwh} kWh.")
             
             with tab9:
                 st.subheader("🌦 Vremenska prognoza i preporučeni LWT (V6.1)")
