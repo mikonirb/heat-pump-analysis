@@ -324,29 +324,29 @@ if df_raw is not None:
                 st.info(f"💡 Info: Do kraja meseca je ostalo još {preostalo_dana} da
             
         with tab9:
-                st.subheader("🌦 Vremenska prognoza i preporučeni LWT (V6.1)")
+            st.subheader("🌦 Vremenska prognoza i preporučeni LWT (V6.1)")
             
-                try:
-                    prog = get_weather_forecast(lat, lon)
+            try:
+                prog = get_weather_forecast(lat, lon)
             
-                    # konzervativna kriva
-                    prog["Preporučeni LWT (°C)"] = 40 - 0.25 * prog["Spoljna T (°C)"]
+                # konzervativna kriva
+                prog["Preporučeni LWT (°C)"] = 40 - 0.25 * prog["Spoljna T (°C)"]
             
-                    st.dataframe(prog.round(1), use_container_width=True)
+                st.dataframe(prog.round(1), use_container_width=True)
             
-                    # grafikon
-                    fig, ax = plt.subplots()
-                    ax.plot(prog["Dan"], prog["Preporučeni LWT (°C)"], marker="o")
-                    ax.set_ylabel("LWT (°C)")
-                    ax.set_title("Preporučeni LWT za narednih 7 dana")
-                    ax.grid(True)
-                    st.pyplot(fig); plt.close(fig)
+                # grafikon
+                fig, ax = plt.subplots()
+                ax.plot(prog["Dan"], prog["Preporučeni LWT (°C)"], marker="o")
+                ax.set_ylabel("LWT (°C)")
+                ax.set_title("Preporučeni LWT za narednih 7 dana")
+                ax.grid(True)
+                st.pyplot(fig); plt.close(fig)
             
-                    # defrost upozorenje
-                    if (prog["T_min (°C)"] < 2).any():
-                        st.warning("❄️ Najavljene minimalne temperature ispod 2 °C – mogući češći defrosti.")
-                    else:
-                        st.success("✅ Nema povećanog rizika od defrosta.")
+                # defrost upozorenje
+                if (prog["T_min (°C)"] < 2).any():
+                    st.warning("❄️ Najavljene minimalne temperature ispod 2 °C – mogući češći defrosti.")
+                else:
+                    st.success("✅ Nema povećanog rizika od defrosta.")
             
                 except Exception as e:
                     st.error("Nije moguće učitati prognozu – koristi ručni unos.")
