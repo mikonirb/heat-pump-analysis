@@ -261,7 +261,7 @@ if df_raw is not None:
             from datetime import date, timedelta
             
 
-           with tab8:
+            with tab8:
                 st.subheader("📈 Precizna prognoza potrošnje (EPS Prag)")
                 
                 from datetime import date
