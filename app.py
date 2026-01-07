@@ -321,7 +321,7 @@ if df_raw is not None:
                 st.success(f"✅ STATUS: Očekivana potrošnja ({int(prognoza_ukupno)} kWh) je unutar bezbedne zone.")
 
             if preostalo_dana > 0:
-                st.info(f"💡 Info: Do kraja meseca je ostalo još {preostalo_dana} da
+                st.info(f"💡 Info: Do kraja meseca je ostalo još {preostalo_dana} dana. Projektovana dodatna potrošnja: {int(prognoza_ukupno - potroseno_kwh)} kWh.") 
             
         with tab9:
             st.subheader("🌦 Vremenska prognoza i preporučeni LWT (V6.1)")
