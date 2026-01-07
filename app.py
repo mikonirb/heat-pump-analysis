@@ -348,20 +348,20 @@ if df_raw is not None:
                 else:
                     st.success("✅ Nema povećanog rizika od defrosta.")
             
-                except Exception as e:
-                    st.error("Nije moguće učitati prognozu – koristi ručni unos.")
-                    st.write(e)
+            except Exception as e:
+                st.error("Nije moguće učitati prognozu – koristi ručni unos.")
+                st.write(e)
             
-                    # fallback – ručni unos
-                    fallback = st.data_editor(
-                        pd.DataFrame({
-                            "Dan": ["D+1", "D+2", "D+3"],
-                            "Spoljna T (°C)": [5, 4, 3]
-                        }),
-                        use_container_width=True
-                    )
-                    fallback["Preporučeni LWT (°C)"] = 40 - 0.25 * fallback["Spoljna T (°C)"]
-                    st.dataframe(fallback.round(1), use_container_width=True)
+                # fallback – ručni unos
+                fallback = st.data_editor(
+                    pd.DataFrame({
+                        "Dan": ["D+1", "D+2", "D+3"],
+                        "Spoljna T (°C)": [5, 4, 3]
+                    }),
+                    use_container_width=True
+                )
+                fallback["Preporučeni LWT (°C)"] = 40 - 0.25 * fallback["Spoljna T (°C)"]
+                st.dataframe(fallback.round(1), use_container_width=True)
 
 
     
