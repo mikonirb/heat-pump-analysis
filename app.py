@@ -261,70 +261,76 @@ if df_raw is not None:
             from datetime import date, timedelta
             
 
-        with tab8:
+       with tab8:
             st.subheader("📈 Precizna prognoza potrošnje (EPS Prag)")
             
             from datetime import date
             
-            # Izbor meseca
+            # 1. Određivanje broja dana u mesecu (Januar=31, Februar=28, itd.)
+            # Koristimo direktan unos ili automatsku tabelu
+            meseci_podaci = {
+                "Januar": 31, "Februar": 28, "Mart": 31, "April": 30, 
+                "Maj": 31, "Juni": 30, "Juli": 31, "Avgust": 31, 
+                "Septembar": 30, "Oktobar": 31, "Novembar": 30, "Decembar": 31
+            }
+
             meseci = df["Mesec"].astype(str).unique().tolist()
             izabrani_mesec = st.selectbox("Izaberi mesec za analizu", meseci, index=len(meseci)-1)
             
-            df_m = df[df["Mesec"].astype(str) == izabrani_mesec]
+            # Uzimamo broj dana za taj mesec
+            ukupno_dana_u_mesecu = meseci_podaci.get(izabrani_mesec, 30)
+
+            c1, c2 = st.columns(2)
+            with c1:
+                proteklo_dana = st.number_input(
+                    "Koliko je dana PROŠLO od 1. u mesecu (uključujući danas):", 
+                    min_value=1, max_value=ukupno_dana_u_mesecu, value=6
+                )
+            with c2:
+                trenutna_potrosnja = st.number_input(
+                    "Koliko je kWh potrošeno OD 1. u mesecu do SAD:", 
+                    min_value=1.0, value=319.0
+                )
+
+            # --- MATEMATIKA KOJA NE SME DA OMANE ---
             
-            if not df_m.empty:
-                dani_u_mesecu = int(df_m["Dana u mesecu"].iloc[0])
-                
-                c1, c2 = st.columns(2)
-                with c1:
-                    dani_protekli = st.number_input(
-                        "Koliko je dana PROŠLO (uključujući danas):", 
-                        min_value=1, max_value=dani_u_mesecu, 
-                        value=min(date.today().day, dani_u_mesecu)
-                    )
-                with c2:
-                    stanje_kwh = st.number_input(
-                        "Koliko je kWh potrošeno OD PRVOG u mesecu do SAD:", 
-                        min_value=0.1, 
-                        value=float(df_m["Potrošena struja (kWh)"].iloc[0])
-                    )
+            # 1. Pravi dnevni prosek
+            stvarno_prosek = trenutna_potrosnja / proteklo_dana
+            
+            # 2. PROGNOZA ZA KRAJ (Prosek x SVI dani u mesecu)
+            prognoza_za_kraj = stvarno_prosek * ukupno_dana_u_mesecu
+            
+            # 3. Koliko je ostalo da se potroši (Prognoza - Trenutno)
+            ostalo_da_se_potrosi = prognoza_za_kraj - trenutna_potrosnja
+            
+            # 4. Preostalo dana
+            preostalo_dana = ukupno_dana_u_mesecu - proteklo_dana
 
-                # --- MATEMATIKA ---
-                # 1. Dnevni prosek na osnovu unetog stanja i proteklih dana
-                dnevni_prosek = stanje_kwh / dani_protekli
-                
-                # 2. PROGNOZA ZA KRAJ = prosek * ukupan broj dana u mesecu
-                prognoza_ukupno = dnevni_prosek * dani_u_mesecu
-                
-                # 3. Koliko će se još potrošiti od sutra do kraja meseca
-                preostalo_da_se_potrosi = prognoza_ukupno - stanje_kwh
-                
-                prag_eps = 1200 
+            st.divider()
 
-                st.divider()
+            # PRIKAZ KOJI MORA BITI RAZLIČIT
+            col1, col2, col3 = st.columns(3)
+            
+            col1.metric("Dnevni prosek", f"{stvarno_prosek:.2f} kWh/dan")
+            
+            col2.metric("Potrošeno do danas", f"{int(trenutna_potrosnja)} kWh")
+            
+            # OVDE MORA BITI npr. 1648 kWh za Januar ako je prosek 53.17
+            col3.metric("PROGNOZA NA KRAJU MESEC", f"{int(prognoza_za_kraj)} kWh")
 
-                # PRIKAZ (Sada sa ispravnim kalkulacijama)
-                col1, col2, col3 = st.columns(3)
-                
-                col1.metric("Dnevni prosek", f"{dnevni_prosek:.2f} kWh/dan")
-                
-                col2.metric("Potrošeno do danas", f"{int(stanje_kwh)} kWh")
-                
-                # Ova cifra MORA biti veća od "Potrošeno do danas" ako mesec još traje
-                col3.metric("PROGNOZA NA KRAJU MESEC", f"{int(prognoza_ukupno)} kWh")
+            st.divider()
 
-                st.divider()
-
-                # LOGIKA UPOZORENJA
-                if prognoza_ukupno > prag_eps:
-                    prekoracenje = prognoza_ukupno - prag_eps
-                    st.error(f"🚨 ALARM: Prognoza ({int(prognoza_ukupno)} kWh) premašuje limit od {prag_eps} kWh za **{int(prekoracenje)} kWh**!")
-                else:
-                    st.success(f"✅ SIGURNO: Mesec ćete verovatno završiti sa **{int(prognoza_ukupno)} kWh**, što je ispod limita.")
-                
-                st.info(f"💡 Objašnjenje: Na osnovu vašeg proseka, potrošićete još oko **{int(preostalo_da_se_potrosi)} kWh** u preostalih **{dani_u_mesecu - dani_protekli}** dana meseca.")
+            # LOGIKA UPOZORENJA (Prag 1600 kWh)
+            prag = 1600
+            if prognoza_za_kraj > prag:
+                prekoracenje = prognoza_za_kraj - prag
+                st.error(f"🚨 ALARM: Sa ovim prosekom završavaš mesec na {int(prognoza_za_kraj)} kWh!")
+                st.warning(f"⚠️ To je {int(prekoracenje)} kWh IZNAD limita od {prag} kWh. Razmisli o štednji!")
             else:
-                st.error("Nema podataka za ovaj mesec.")
+                st.success(f"✅ SIGURNO: Završićeš mesec na {int(prognoza_za_kraj)} kWh, što je unutar limita.")
+
+            st.info(f"💡 Objašnjenje: Prošlo je {proteklo_dana} dana, ostalo je još {preostalo_dana} dana do kraja {izabrani_mesec.lower()}a. "
+                    f"U tom periodu ćeš potrošiti još oko {int(ostalo_da_se_potrosi)} kWh.")
             
             with tab9:
                 st.subheader("🌦 Vremenska prognoza i preporučeni LWT (V6.1)")
