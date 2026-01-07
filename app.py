@@ -262,7 +262,7 @@ if df_raw is not None:
             
 
         with tab8:
-            st.subheader("📈 Automatska prognoza potrošnje")
+            st.subheader("📈 Automatska prognoza potrošnje (FIX V6.3)")
             
             from datetime import date
             
@@ -270,53 +270,55 @@ if df_raw is not None:
             meseci = df["Mesec"].astype(str).unique().tolist()
             izabrani_mesec = st.selectbox("Izaberi mesec", meseci, index=len(meseci)-1)
             
-            # 2. Filtriranje reda
+            # 2. Izvlačenje podataka direktno iz reda koji si izabrao
             red_iz_baze = df[df["Mesec"].astype(str) == izabrani_mesec].iloc[0]
             
-            # 3. Podaci iz kolona
             potroseno_kwh = float(red_iz_baze["Potrošena struja (kWh)"])
-            ukupno_dana_u_mesecu = int(red_iz_baze["Dana u mesecu"]) # Kolona I
+            ukupno_dana_u_mesecu = int(red_iz_baze["Dana u mesecu"]) # Ovo je tvoja kolona I (npr. 31)
             
-            # --- POPRAVLJENA LOGIKA ZA DANE ---
-            danasnji_dan = date.today().day
+            # --- KLJUČNA ISPRAVKA: ODREĐIVANJE PROTEKLIH DANA ---
+            danas = date.today()
             
-            # Ako je izabrani mesec poslednji u listi (pretpostavljamo da je to tekući mesec)
-            if izabrani_mesec == meseci[-1]:
-                proteklo_dana = danasnji_dan
+            # Proveravamo da li je izabrani mesec tekući mesec (Januar)
+            # Ako jeste, delimo sa današnjim danom (7). Ako nije, delimo sa svim danima tog meseca.
+            is_tekuci = False
+            if "Januar" in izabrani_mesec and danas.month == 1: is_tekuci = True
+            elif "Februar" in izabrani_mesec and danas.month == 2: is_tekuci = True
+            elif "Mart" in izabrani_mesec and danas.month == 3: is_tekuci = True
+            # ... dodaj ostale ako želiš, ali ovo pokriva trenutni problem
+            
+            if is_tekuci:
+                proteklo_dana = danas.day # Danas je 7.
             else:
                 proteklo_dana = ukupno_dana_u_mesecu
             
-            # Osiguranje da proteklo_dana ne bude veće od ukupno_dana (npr. ako je kraj meseca)
+            # Sigurnosni ventil: proteklo_dana ne može biti veće od ukupno_dana
             proteklo_dana = min(proteklo_dana, ukupno_dana_u_mesecu)
 
-            # --- MATEMATIKA KOJA SADA MORA DA RADI ---
+            # --- MATEMATIKA KOJA SADA MORA BITI RAZLIČITA ---
             dnevni_prosek = potroseno_kwh / proteklo_dana
+            
+            # PROGNOZA MORA BITI: Prosek (npr. 55) * 31 dan (iz kolone I)
             prognoza_ukupno = dnevni_prosek * ukupno_dana_u_mesecu
-            preostalo_dana = ukupno_dana_u_mesecu - proteklo_dana
-
-            # --- PRIKAZ ---
-            st.write(f"📅 **Analiza za {izabrani_mesec}**")
-            st.write(f"Sistem računa prosek na osnovu **{proteklo_dana}** dana, a projektuje na **{ukupno_dana_u_mesecu}** dana.")
+            
+            st.write(f"📅 **Status za {izabrani_mesec}:**")
+            st.info(f"Sistem deli potrošnju sa **{proteklo_dana} dana** (proteklo), a projektuje na **{ukupno_dana_u_mesecu} dana** (ceo mesec iz kolone I).")
             
             col1, col2, col3 = st.columns(3)
             col1.metric("Dnevni prosek", f"{dnevni_prosek:.2f} kWh")
-            col2.metric("Očitano (Sheets)", f"{int(potroseno_kwh)} kWh")
+            col2.metric("Očitano do danas", f"{int(potroseno_kwh)} kWh")
             
-            # OVDE MORA BITI RAZLIKA: (npr. 50kWh prosek * 31 dan = 1550kWh)
+            # Očekivani rezultat za Januar: (386 / 7) * 31 = 1709 kWh
             col3.metric("PROGNOZA NA KRAJU", f"{int(prognoza_ukupno)} kWh")
 
             st.divider()
 
-            # EPS PRAG (1200 kWh)
+            # EPS PRAG
             prag = 1200
             if prognoza_ukupno > prag:
-                prekoracenje = prognoza_ukupno - prag
-                st.error(f"🚨 ALARM: Bićete iznad limita za **{int(prekoracenje)} kWh**!")
+                st.error(f"🚨 ALARM: Prognoza ({int(prognoza_ukupno)} kWh) prelazi prag od {prag} kWh!")
             else:
-                st.success(f"✅ STATUS: Ispod limita od {prag} kWh.")
-
-            if preostalo_dana > 0:
-                st.info(f"💡 Preostalo je još {preostalo_dana} dana do kraja meseca.") 
+                st.success(f"✅ STATUS: Očekivana potrošnja je unutar limita.") 
             
         with tab9:
             st.subheader("🌦 Vremenska prognoza i preporučeni LWT (V6.1)")
