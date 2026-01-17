@@ -205,7 +205,7 @@ if df_raw is not None:
                 if (dnevni_prosek * 30) > granica:
                     c2.metric("Projektovan prelazak praga", datum_prelaska.strftime("%d. %b"))
                     st.error(f"🚨 **ALARM:** Preći ćete granicu od {granica} kWh oko **{datum_prelaska.strftime('%d. %m. %Y.')}**")
-                    st.info("📢 **INFO:** Ukoliko se ovo ponavlja svakog meseca, obavezno **zamenite brojilo** za jače ili pređite na model koji podržava veća vršna opterećenja.")
+                    st.info("📢 **INFO:** Ukoliko se ovo ponavlja svakog meseca, obavezno **zamenite brojilo koje meri** ")
                 else:
                     c2.metric("Status praga", "Bezbedno")
                     st.success(f"✅ Sa potrošnjom od {int(dnevni_prosek * 30)} kWh/mesec, ostajete u plavoj zoni.")
