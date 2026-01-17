@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import base64
 import requests
+from datetime import date, timedelta  # OVE LINIJE SU FALILE
 
 
 # Pokušaj uvoza matplotlib-a
@@ -175,50 +175,46 @@ if df_raw is not None:
 
 
         with tab3:
-            st.subheader("💡 EPS i Troškovi")
+            st.subheader("💡 EPS Analiza i Granice")
             
-            # Osnovni podaci
+            # Parametri
             cena = st.number_input("Cena kWh (din)", value=10.5)
             racun_tp = ukupna_struja * cena
+            
+            # Uzimamo podatke iz poslednjeg unetog reda
+            poslednji_red = df.iloc[-1]
+            potrosnja_trenutna = float(poslednji_red["Potrošena struja (kWh)"])
+            
+            # Izračunavanje dana (danasnji dan u mesecu)
+            danasnji_dan_br = date.today().day
+            dnevni_prosek = potrosnja_trenutna / danasnji_dan_br if danasnji_dan_br > 0 else 0
             
             c1, c2 = st.columns(2)
             c1.metric("Ukupan račun (sezona)", f"{int(racun_tp)} RSD")
             
-            # --- NOVO: PROJEKCIJA PRELASKA PRAGA ---
-            danasnji_dan_br = date.today().day
-            poslednji_red = df.iloc[-1]
-            potrosnja_trenutna = float(poslednji_red["Potrošena struja (kWh)"])
-            dnevni_prosek = potrosnja_trenutna / danasnji_dan_br
-            
+            # --- LOGIKA ZA PROBIJANJE GRANICE ---
             granica = 1200
             
             if potrosnja_trenutna < granica:
                 preostalo_kwh = granica - potrosnja_trenutna
-                dana_do_kraja = preostalo_kwh / dnevni_prosek if dnevni_prosek > 0 else 0
-                datum_prelaska = date.today() + timedelta(days=int(dana_do_kraja))
+                # Koliko dana nam je ostalo sa ovakvim tempom trošenja?
+                dana_do_granice = preostalo_kwh / dnevni_prosek if dnevni_prosek > 0 else 99
+                datum_prelaska = date.today() + timedelta(days=int(dana_do_granice))
                 
-                if dnevni_prosek * 30 > granica:
-                    c2.metric("Projektovan datum prelaska 1600 kWh", datum_prelaska.strftime("%d. %b"))
-                    st.error(f"🚨 **ALARM:** Sa trenutnom potrošnjom od **{dnevni_prosek:.1f} kWh/dan**, preći ćete prag od {granica} kWh oko **{datum_prelaska.strftime('%d. %m. %Y.')}**")
-                    st.warning("📢 **SAVET:** Razmislite o zameni brojila za jače ili uvođenju kontrolnog brojila kako biste preciznije pratili opterećenje po fazama.")
+                # Ako je projekcija za 30 dana preko granice
+                if (dnevni_prosek * 30) > granica:
+                    c2.metric("Projektovan prelazak praga", datum_prelaska.strftime("%d. %b"))
+                    st.error(f"🚨 **ALARM:** Preći ćete granicu od {granica} kWh oko **{datum_prelaska.strftime('%d. %m. %Y.')}**")
+                    st.info("📢 **INFO:** Ukoliko se ovo ponavlja svakog meseca, obavezno **zamenite brojilo** za jače ili pređite na model koji podržava veća vršna opterećenja.")
                 else:
-                    c2.metric("Projektovan status", "Bezbedno")
-                    st.success(f"✅ Trenutno ste bezbedni. Projektovana mesečna potrošnja je {int(dnevni_prosek * 30)} kWh.")
+                    c2.metric("Status praga", "Bezbedno")
+                    st.success(f"✅ Sa potrošnjom od {int(dnevni_prosek * 30)} kWh/mesec, ostajete u plavoj zoni.")
             else:
-                st.error(f"⚠️ Već ste prešli prag od {granica} kWh za ovaj mesec!")
+                st.error(f"⚠️ Već ste prešli limit od {granica} kWh!")
+                st.warning("Savet: Odmah proverite mogućnost zamene brojila ili preusmerite potrošnju na noćnu tarifu.")
 
             st.divider()
             st.bar_chart(df, x="Mesec", y="Potrošena struja (kWh)")
-
-            # Vizuelni indikator zone
-            mesecna_proj = dnevni_prosek * 30
-            st.write("### 🚦 EPS Statusna Skala")
-            procenti = min(100, int((mesecna_proj / 1600) * 100))
-            st.progress(procenti / 100)
-            
-            if mesecna_proj > 1600:
-                st.subheader("❗ HITNO: ZAMENITE BROJILO")
-                st.write("Vaša potrošnja redovno ulazi u crvenu zonu. Preporučuje se prelazak na **dvotarifno brojilo** (ako već niste) i stroga kontrola paljenja velikih potrošača tokom dana.")
 
 
         with tab4:
