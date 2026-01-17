@@ -176,21 +176,49 @@ if df_raw is not None:
 
         with tab3:
             st.subheader("💡 EPS i Troškovi")
+            
+            # Osnovni podaci
             cena = st.number_input("Cena kWh (din)", value=10.5)
             racun_tp = ukupna_struja * cena
-            st.metric("Ukupan račun za struju", f"{int(racun_tp)} RSD")
+            
+            c1, c2 = st.columns(2)
+            c1.metric("Ukupan račun (sezona)", f"{int(racun_tp)} RSD")
+            
+            # --- NOVO: PROJEKCIJA PRELASKA PRAGA ---
+            danasnji_dan_br = date.today().day
+            poslednji_red = df.iloc[-1]
+            potrosnja_trenutna = float(poslednji_red["Potrošena struja (kWh)"])
+            dnevni_prosek = potrosnja_trenutna / danasnji_dan_br
+            
+            granica = 1200
+            
+            if potrosnja_trenutna < granica:
+                preostalo_kwh = granica - potrosnja_trenutna
+                dana_do_kraja = preostalo_kwh / dnevni_prosek if dnevni_prosek > 0 else 0
+                datum_prelaska = date.today() + timedelta(days=int(dana_do_kraja))
+                
+                if dnevni_prosek * 30 > granica:
+                    c2.metric("Projektovan datum prelaska 1600 kWh", datum_prelaska.strftime("%d. %b"))
+                    st.error(f"🚨 **ALARM:** Sa trenutnom potrošnjom od **{dnevni_prosek:.1f} kWh/dan**, preći ćete prag od {granica} kWh oko **{datum_prelaska.strftime('%d. %m. %Y.')}**")
+                    st.warning("📢 **SAVET:** Razmislite o zameni brojila za jače ili uvođenju kontrolnog brojila kako biste preciznije pratili opterećenje po fazama.")
+                else:
+                    c2.metric("Projektovan status", "Bezbedno")
+                    st.success(f"✅ Trenutno ste bezbedni. Projektovana mesečna potrošnja je {int(dnevni_prosek * 30)} kWh.")
+            else:
+                st.error(f"⚠️ Već ste prešli prag od {granica} kWh za ovaj mesec!")
+
+            st.divider()
             st.bar_chart(df, x="Mesec", y="Potrošena struja (kWh)")
 
-            mesecna_proj = prosek_dan * 30
-
-            st.subheader("🚦 EPS status (projekcija)")
-
-            if mesecna_proj > 1200:
-                st.error("🔴 Projekcija ulazi u CRVENU zonu")
-            elif mesecna_proj > 1000:
-                st.warning("🟡 Blizu PLAVE zone")
-            else:
-                st.success("🟢 Zelena zona – bezbedno")
+            # Vizuelni indikator zone
+            mesecna_proj = dnevni_prosek * 30
+            st.write("### 🚦 EPS Statusna Skala")
+            procenti = min(100, int((mesecna_proj / 1600) * 100))
+            st.progress(procenti / 100)
+            
+            if mesecna_proj > 1600:
+                st.subheader("❗ HITNO: ZAMENITE BROJILO")
+                st.write("Vaša potrošnja redovno ulazi u crvenu zonu. Preporučuje se prelazak na **dvotarifno brojilo** (ako već niste) i stroga kontrola paljenja velikih potrošača tokom dana.")
 
 
         with tab4:
