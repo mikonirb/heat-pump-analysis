@@ -112,21 +112,23 @@ if df_raw is not None:
         ])
 
         with tab1:
-            st.subheader("📊 Mesečni izveštaj")
+            st.subheader("📊 Mesečni i Sezonski izveštaj")
         
-            # Uzimamo poslednji red iz tabele (npr. Decembar)
-            # df.tail(1) osigurava da uzmemo baš poslednji upisan red
+            # --- NOVO: KALKULACIJA SEZONSKOG COP-a ---
+            sezonski_cop = df["Proizvedena energija (kWh)"].sum() / df["Potrošena struja (kWh)"].sum()
             poslednji_red = df.iloc[-1]
             
-            m1, m2, m3 = st.columns(3)
+            # Prikaz ključnih metrika u redu
+            m0, m1, m2, m3 = st.columns(4)
+            m0.metric("SEZONSKI COP (Sveukupno)", f"{sezonski_cop:.2f}", help="Ukupna proizvedena energija / Ukupna potrošena struja")
             m1.metric("Opterećenje (Komp/Pumpa)", f"{poslednji_red['Rad Komp %']:.1f} %")
             m2.metric("Prosečna Snaga", f"{poslednji_red['Snaga (kW)']:.2f} kW")
-            m3.metric("Trenutni COP", f"{poslednji_red['COP']:.2f}")
+            m3.metric("Trenutni Mesečni COP", f"{poslednji_red['COP']:.2f}")
             
             st.divider()
         
-            # Tabela sa podacima - prikazujemo je samo JEDNOM
-            st.write("### 📋 Pregled podataka")
+            # Tabela sa podacima
+            st.write("### 📋 Pregled podataka po mesecima")
             st.dataframe(df.round(2), use_container_width=True)
             
             st.divider()
@@ -142,8 +144,11 @@ if df_raw is not None:
             
             with c2:
                 fig2, ax2 = plt.subplots()
-                ax2.plot(df["Mesec"], df["COP"], marker="o", color="green")
+                ax2.plot(df["Mesec"], df["COP"], marker="o", color="green", label="Mesečni COP")
+                # Dodajemo liniju za Sezonski COP na grafikon radi poređenja
+                ax2.axhline(y=sezonski_cop, color='r', linestyle='--', label=f"Sezonski prosek ({sezonski_cop:.2f})")
                 ax2.set_title("Efikasnost (COP)")
+                ax2.legend()
                 ax2.grid(True)
                 st.pyplot(fig2)
                 plt.close(fig2)
