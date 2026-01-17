@@ -273,7 +273,7 @@ if df_raw is not None:
                 st.write(f"Ušteda: **{int(t_drva - racun_tp)} RSD**")
             with c2:
                 st.markdown("### 🪵 Pelet")
-                cena_peleta = st.number_input("Cena peleta (din/kg)", value=46)
+                cena_peleta = st.number_input("Cena peleta (din/kg)", value=36)
                 t_peleta = (ukupna_proizvedena / 4.8) * cena_peleta
                 st.metric("Trošak", f"{int(t_peleta)} RSD")
                 st.write(f"Ušteda: **{int(t_peleta - racun_tp)} RSD**")
@@ -320,7 +320,7 @@ if df_raw is not None:
             col1, col2, col3 = st.columns(3)
             
             col1.metric("Dnevni prosek", f"{dnevni_prosek:.2f} kWh")
-            col2.metric("Potrošeno (7 dana)", f"{int(trenutna_potrosnja)} kWh")
+            col2.metric("Potrošeno ( do sada )", f"{int(trenutna_potrosnja)} kWh")
             
             # Očekivani rezultat: (386 / 7) * 30 = 1654 kWh
             col3.metric("PROGNOZA (30 DANA)", f"{int(prognoza_30_dana)} kWh")
