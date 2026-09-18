@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
-from datetime import date, timedelta  # OVE LINIJE SU FALILE
-
+from datetime import date, timedelta
 
 # Pokušaj uvoza matplotlib-a
 try:
@@ -22,25 +21,29 @@ if not HAS_MATPLOTLIB:
 
 st.title("🔥 Toplotna pumpa – Kompletna Analiza Daikin EBLQ16")
 
-# --- NOVI PRISTUP (Direktno čitanje taba Potrosnja) ---
-# --- PROVERENI LINK FORMAT ---
-SHEET_ID = "1NGaf83t82G9tjsL_5wsvYNYvKii8A0biUXJkzsm9Bf8"  # Ubaci ID tvoje Google tabele
-SHEET_NAME = "Potrosnja"
+# --- LINKOVI ZA DVE SEZONE ---
+SHEET_ID = "1NGaf83t82G9tjsL_5wsvYNYvKii8A0biUXJkzsm9Bf8"  # Tvoja trenutna Google tabela
 
-# Ovaj link direktno izvozi tab u CSV format
-gsheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=344695767"
+# URL za TRENUTNU SEZONU (npr. 2026/2027)
+gsheet_url_tekuca = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=344695767"
 
-# NAPOMENA: Ako "Potrosnja" nije prvi tab u tabeli, moramo naći njegov GID.
-# GID vidiš u URL-u brauzera kada klikneš na taj tab (piše na kraju: gid=123456)
+# URL za PRETHODNU SEZONU (2025/2026) 
+# NAPOMENA: Ako je stara sezona drugi TAB u istoj tabeli, promeni samo GID (npr. gid=12345678)
+# Ako je zaseban fajl, unesi novi SHEET_ID.
+SHEET_ID_PROSLA = "1NGaf83t82G9tjsL_5wsvYNYvKii8A0biUXJkzsm9Bf8" 
+GID_PROSLA = "0" # Zameniti sa odgovarajućim GID-om za tab prošle sezone
+gsheet_url_prosla = f"https://docs.google.com/spreadsheets/d/{SHEET_ID_PROSLA}/export?format=csv&gid={GID_PROSLA}"
+
+
 @st.cache_data(ttl=60)
 def load_data(url):
     try:
-        # Čitamo kao CSV jer je brže i pouzdanije za Streamlit
         df = pd.read_csv(url)
         return df
     except Exception as e:
         st.error(f"Greška pri povlačenju podataka: {e}")
         return None
+
 @st.cache_data(ttl=3600)
 def get_weather_forecast(lat, lon):
     url = (
@@ -63,10 +66,30 @@ def get_weather_forecast(lat, lon):
     return df_w
 
 
-# 2. OBRADA PODATAKA
-df_raw = load_data(gsheet_url)
+def clean_dataframe(df_raw):
+    """Pomoćna funkcija za čišćenje i formatiranje tabele."""
+    if df_raw is None:
+        return None
+    df = df_raw.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    df = df.rename(columns={"Startovi kompresora": "Startovi"})
+    
+    for col in df.columns:
+        if col != "Mesec":
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce')
+            
+    df["COP"] = df["Proizvedena energija (kWh)"] / df["Potrošena struja (kWh)"]
+    df["kWh/dan"] = df["Potrošena struja (kWh)"] / df["Dana u mesecu"]
+    df["Rad Komp %"] = (df["Rad kompresora (h)"] / df["Rad pumpe (h)"]) * 100
+    df["Snaga (kW)"] = df["Proizvedena energija (kWh)"] / df["Rad kompresora (h)"]
+    return df
 
-# Ako Google link ne radi, dajemo opciju ručnog uploada kao rezervu
+
+# 2. OBRADA PODATAKA
+df_raw = load_data(gsheet_url_tekuca)
+df_raw_prosla = load_data(gsheet_url_prosla)
+
+# Sidebar podešavanja
 st.sidebar.header("📁 Izvor podataka")
 uploaded_file = st.sidebar.file_uploader("Ili učitaj Excel ručno", type=["xlsx"])
 
@@ -77,145 +100,95 @@ lon = st.sidebar.number_input("Geografska dužina", value=21.9)
 if uploaded_file:
     df_raw = pd.read_excel(uploaded_file, engine='openpyxl')
 
-if df_raw is not None:
+df = clean_dataframe(df_raw)
+df_prosla = clean_dataframe(df_raw_prosla)
+
+if df is not None:
     try:
-        df = df_raw.copy()
-        df.columns = [str(c).strip() for c in df.columns]
-        # Normalizacija naziva kolona
-        df = df.rename(columns={
-            "Startovi kompresora": "Startovi"
-        })
-
-        
-        # Sređivanje brojeva (zarezi u tačke)
-        for col in df.columns:
-            if col != "Mesec":
-                df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce')
-
-        # KALKULACIJE
-        df["COP"] = df["Proizvedena energija (kWh)"] / df["Potrošena struja (kWh)"]
-        df["kWh/dan"] = df["Potrošena struja (kWh)"] / df["Dana u mesecu"]
-        df["Rad Komp %"] = (df["Rad kompresora (h)"] / df["Rad pumpe (h)"]) * 100
-        df["Snaga (kW)"] = df["Proizvedena energija (kWh)"] / df["Rad kompresora (h)"]
-        
         ukupna_proizvedena = df["Proizvedena energija (kWh)"].sum()
         ukupna_struja = df["Potrošena struja (kWh)"].sum()
         prosek_dan = df["kWh/dan"].mean()
 
         st.success("✅ Podaci uspešno učitani!")
 
-        # 3. SVIH 7 TABOVA
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+        # 3. SVIH 10 TABOVA (DODAT TAB ZA POREĐENJE SEZONA)
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
             "📊 Pregled", "🌡 Kriva", "💡 EPS", "📅 Sezona",
             "🚀 OPTIMIZACIJA", "❄️ DEFROST", "💰 POREĐENJE",
-            "📈 DNEVNA PROGNOZA", "🌦 Vremenska prognoza i preporučeni LWT"
+            "📈 DNEVNA PROGNOZA", "🌦 Vremenska prognoza i preporučeni LWT",
+            "🔄 POREĐENJE SEZONA"
         ])
 
         with tab1:
             st.subheader("📊 Mesečni i Sezonski izveštaj")
-        
-            # --- NOVO: KALKULACIJA SEZONSKOG COP-a ---
             sezonski_cop = df["Proizvedena energija (kWh)"].sum() / df["Potrošena struja (kWh)"].sum()
             poslednji_red = df.iloc[-1]
             
-            # Prikaz ključnih metrika u redu
             m0, m1, m2, m3 = st.columns(4)
-            m0.metric("SEZONSKI COP (Sveukupno)", f"{sezonski_cop:.2f}", help="Ukupna proizvedena energija / Ukupna potrošena struja")
+            m0.metric("SEZONSKI COP (Sveukupno)", f"{sezonski_cop:.2f}")
             m1.metric("Opterećenje (Komp/Pumpa)", f"{poslednji_red['Rad Komp %']:.1f} %")
             m2.metric("Prosečna Snaga", f"{poslednji_red['Snaga (kW)']:.2f} kW")
             m3.metric("Trenutni Mesečni COP", f"{poslednji_red['COP']:.2f}")
             
             st.divider()
-        
-            # Tabela sa podacima
             st.write("### 📋 Pregled podataka po mesecima")
             st.dataframe(df.round(2), use_container_width=True)
-            
             st.divider()
-        
-            # Grafikoni
+            
             c1, c2 = st.columns(2)
             with c1:
                 fig1, ax1 = plt.subplots()
                 ax1.bar(df["Mesec"], df["kWh/dan"], color="skyblue")
                 ax1.set_title("Potrošnja (kWh/dan)")
-                st.pyplot(fig1)
-                plt.close(fig1)
+                st.pyplot(fig1); plt.close(fig1)
             
             with c2:
                 fig2, ax2 = plt.subplots()
                 ax2.plot(df["Mesec"], df["COP"], marker="o", color="green", label="Mesečni COP")
-                # Dodajemo liniju za Sezonski COP na grafikon radi poređenja
                 ax2.axhline(y=sezonski_cop, color='r', linestyle='--', label=f"Sezonski prosek ({sezonski_cop:.2f})")
                 ax2.set_title("Efikasnost (COP)")
-                ax2.legend()
-                ax2.grid(True)
-                st.pyplot(fig2)
-                plt.close(fig2)
-            
+                ax2.legend(); ax2.grid(True)
+                st.pyplot(fig2); plt.close(fig2)
+
         with tab2:
             st.subheader("🌡 Analiza krive grejanja")
             fig3, ax3 = plt.subplots()
             ax3.scatter(df["Spoljna T (°C)"], df["LWT (°C)"], color="red", s=100, label="Realne tačke")
             tx = np.linspace(df["Spoljna T (°C)"].min()-2, df["Spoljna T (°C)"].max()+2, 10)
-           # Konzervativna idealna kriva za radijatore
             ty = 40 - 0.25 * tx
             ax3.plot(tx, ty, "--", color="gray", label="Referentna kriva")
             ax3.set_xlabel("Spoljna T"); ax3.set_ylabel("LWT"); ax3.legend()
             st.pyplot(fig3); plt.close(fig3)
-            odstupanje = df["LWT (°C)"] - (40 - 0.25 * df["Spoljna T (°C)"])
-            prosek_odstupanja = odstupanje.mean()
-
-            if prosek_odstupanja > 1.5:
-                st.warning("🔺 LWT je u proseku previsok – postoji prostor za smanjenje.")
-            elif prosek_odstupanja < -1:
-                st.info("🔹 LWT je niži od idealnog – sistem je već optimizovan.")
-            else:
-                st.success("✅ Kriva grejanja je blizu optimalne.")
-
 
         with tab3:
             st.subheader("💡 EPS Analiza i Granice")
-            
-            # Parametri
             cena = st.number_input("Cena kWh (din)", value=10.5)
             racun_tp = ukupna_struja * cena
-            
-            # Uzimamo podatke iz poslednjeg unetog reda
             poslednji_red = df.iloc[-1]
             potrosnja_trenutna = float(poslednji_red["Potrošena struja (kWh)"])
-            
-            # Izračunavanje dana (danasnji dan u mesecu)
             danasnji_dan_br = date.today().day
             dnevni_prosek = potrosnja_trenutna / danasnji_dan_br if danasnji_dan_br > 0 else 0
             
             c1, c2 = st.columns(2)
             c1.metric("Ukupan račun (sezona)", f"{int(racun_tp)} RSD")
-            
-            # --- LOGIKA ZA PROBIJANJE GRANICE ---
             granica = 1200
             
             if potrosnja_trenutna < granica:
                 preostalo_kwh = granica - potrosnja_trenutna
-                # Koliko dana nam je ostalo sa ovakvim tempom trošenja?
                 dana_do_granice = preostalo_kwh / dnevni_prosek if dnevni_prosek > 0 else 99
                 datum_prelaska = date.today() + timedelta(days=int(dana_do_granice))
                 
-                # Ako je projekcija za 30 dana preko granice
                 if (dnevni_prosek * 30) > granica:
                     c2.metric("Projektovan prelazak praga", datum_prelaska.strftime("%d. %b"))
                     st.error(f"🚨 **ALARM:** Preći ćete granicu od {granica} kWh oko **{datum_prelaska.strftime('%d. %m. %Y.')}**")
-                    st.info("📢 **INFO:** Ukoliko se ovo ponavlja svakog meseca, obavezno **zamenite brojilo koje meri** ")
                 else:
                     c2.metric("Status praga", "Bezbedno")
                     st.success(f"✅ Sa potrošnjom od {int(dnevni_prosek * 30)} kWh/mesec, ostajete u plavoj zoni.")
             else:
                 st.error(f"⚠️ Već ste prešli limit od {granica} kWh!")
-                st.warning("Savet: Odmah proverite mogućnost zamene brojila ili preusmerite potrošnju na noćnu tarifu.")
 
             st.divider()
             st.bar_chart(df, x="Mesec", y="Potrošena struja (kWh)")
-
 
         with tab4:
             st.subheader("📅 Projekcija sezone")
@@ -224,10 +197,8 @@ if df_raw is not None:
 
         with tab5:
             st.subheader("🚀 Optimizacija rada (V5.x PRO)")
-
             smanjenje = st.slider("Smanjenje LWT (°C)", 0, 5, 1)
-            faktor = smanjenje * 0.03  # 3% po °C – konzervativno
-
+            faktor = smanjenje * 0.03
             nova_dnevna = prosek_dan * (1 - faktor)
             nova_sezona = nova_dnevna * dani_sezone
             usteda_kwh = prosek_dan * dani_sezone - nova_sezona
@@ -235,25 +206,6 @@ if df_raw is not None:
             st.metric("Nova procenjena potrošnja (kWh/sezona)", int(nova_sezona))
             st.metric("Ušteda energije (kWh)", int(usteda_kwh))
             st.metric("Ušteda u dinarima", int(usteda_kwh * cena))
-
-            if smanjenje >= 3:
-                st.warning("⚠️ Smanjenje ≥3°C – proveri komfor u najhladnijim danima.")
-            else:
-                st.success("✅ Smanjenje je u bezbednoj zoni.")
-            st.subheader("🛋 Comfort Index")
-
-            startovi_dan = df["Startovi"].sum() / df["Dana u mesecu"].sum()
-            comfort = max(60, 100 - startovi_dan * 0.7)
-
-            st.metric("Comfort Index", f"{int(comfort)} / 100")
-
-            if comfort > 85:
-                st.success("Komfor vrlo stabilan – optimizacija bez rizika.")
-            elif comfort > 75:
-                st.info("Komfor dobar – male korekcije su moguće.")
-            else:
-                st.warning("Komfor na granici – ne preporučuje se dalje smanjenje LWT.")
-
 
         with tab6:
             st.subheader("❄️ Analiza otapanja (Defrost)")
@@ -266,120 +218,107 @@ if df_raw is not None:
             st.subheader("💰 Poređenje troškova grejanja")
             c1, c2, c3 = st.columns(3)
             with c1:
-                st.markdown("### 🪵 Drva")
                 cena_drva = st.number_input("Cena drva (din/m3)", value=9000)
                 t_drva = (ukupna_proizvedena / 1400) * cena_drva
-                st.metric("Trošak", f"{int(t_drva)} RSD")
-                st.write(f"Ušteda: **{int(t_drva - racun_tp)} RSD**")
+                st.metric("Drva", f"{int(t_drva)} RSD", delta=f"{int(t_drva - racun_tp)} RSD")
             with c2:
-                st.markdown("### 🪵 Pelet")
                 cena_peleta = st.number_input("Cena peleta (din/kg)", value=36)
                 t_peleta = (ukupna_proizvedena / 4.8) * cena_peleta
-                st.metric("Trošak", f"{int(t_peleta)} RSD")
-                st.write(f"Ušteda: **{int(t_peleta - racun_tp)} RSD**")
+                st.metric("Pelet", f"{int(t_peleta)} RSD", delta=f"{int(t_peleta - racun_tp)} RSD")
             with c3:
-                st.markdown("### 💨 Gas")
                 cena_gasa = st.number_input("Cena gasa (din/m3)", value=55)
                 t_gas = (ukupna_proizvedena / 9.5) * cena_gasa
-                st.metric("Trošak", f"{int(t_gas)} RSD")
-                st.write(f"Ušteda: **{int(t_gas - racun_tp)} RSD**")
-
-                st.divider()
-                st.info("Obračun koristi prosečne energetske vrednosti: Drva ~1400kWh/m3, Pelet ~4.8kWh/kg, Gas ~9.5kWh/m3.")
-                
-            from datetime import date, timedelta
-            
+                st.metric("Gas", f"{int(t_gas)} RSD", delta=f"{int(t_gas - racun_tp)} RSD")
 
         with tab8:
-            st.subheader("📈 Prognoza potrošnje na 30 dana (EPS Granica)")
-            
-            from datetime import date
-            
-            # 1. Izbor meseca iz baze
+            st.subheader("📈 Prognoza potrošnje na 30 dana")
             meseci = df["Mesec"].astype(str).unique().tolist()
             izabrani_mesec = st.selectbox("Izaberi mesec", meseci, index=len(meseci)-1)
-            
-            # 2. Podaci o potrošnji iz reda koji si izabrao
             red_iz_baze = df[df["Mesec"].astype(str) == izabrani_mesec].iloc[0]
             trenutna_potrosnja = float(red_iz_baze["Potrošena struja (kWh)"])
             
-            # --- KLJUČNA MATEMATIKA ---
-            
-            # Broj proteklih dana (Danas je 7. januar, dakle 7)
-            danasnji_dan = date.today().day
-            
-            # Dnevni prosek (npr. 386 / 7 = 55.14)
-            dnevni_prosek = trenutna_potrosnja / danasnji_dan
-            
-            # PROGNOZA NA 30 DANA (Fiksno 30 dana kako si tražio)
-            prognoza_30_dana = dnevni_prosek * 30
-            
-            # --- PRIKAZ ---
-            st.info(f"Obračun: {trenutna_potrosnja} kWh / {danasnji_dan} dana × 30 dana")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            col1.metric("Dnevni prosek", f"{dnevni_prosek:.2f} kWh")
-            col2.metric("Potrošeno ( do sada )", f"{int(trenutna_potrosnja)} kWh")
-            
-            # Očekivani rezultat: (386 / 7) * 30 = 1654 kWh
-            col3.metric("PROGNOZA (30 DANA)", f"{int(prognoza_30_dana)} kWh")
+            prognoza_30_dana = (trenutna_potrosnja / danasnji_dan_br) * 30 if danasnji_dan_br > 0 else 0
+            st.metric("PROGNOZA (30 DANA)", f"{int(prognoza_30_dana)} kWh")
 
-            st.divider()
-
-            # PROVERA GRANICE OD 1200 kWh (Plava/Crvena zona)
-            granica = 1200
-            if prognoza_30_dana > granica:
-                razlika = prognoza_30_dana - granica
-                st.error(f"🚨 ALARM: Sa ovim prosekom prelaziš granicu od {granica} kWh!")
-                st.warning(f"Projektovana potrošnja je **{int(razlika)} kWh iznad** limita za plavu zonu.")
-            else:
-                st.success(f"✅ STATUS: Prognoza ({int(prognoza_30_dana)} kWh) je unutar granice od {granica} kWh.")
-            
         with tab9:
-            st.subheader("🌦 Vremenska prognoza i preporučeni LWT (V6.1)")
-            
+            st.subheader("🌦 Vremenska prognoza i preporučeni LWT")
             try:
                 prog = get_weather_forecast(lat, lon)
-            
-                # konzervativna kriva
                 prog["Preporučeni LWT (°C)"] = 40 - 0.25 * prog["Spoljna T (°C)"]
-            
                 st.dataframe(prog.round(1), use_container_width=True)
-            
-                # grafikon
-                fig, ax = plt.subplots()
-                ax.plot(prog["Dan"], prog["Preporučeni LWT (°C)"], marker="o")
-                ax.set_ylabel("LWT (°C)")
-                ax.set_title("Preporučeni LWT za narednih 7 dana")
-                ax.grid(True)
-                st.pyplot(fig); plt.close(fig)
-            
-                # defrost upozorenje
-                if (prog["T_min (°C)"] < 2).any():
-                    st.warning("❄️ Najavljene minimalne temperature ispod 2 °C – mogući češći defrosti.")
-                else:
-                    st.success("✅ Nema povećanog rizika od defrosta.")
-            
             except Exception as e:
-                st.error("Nije moguće učitati prognozu – koristi ručni unos.")
-                st.write(e)
+                st.error("Nije moguće učitati prognozu.")
+
+        # --- NOVI TAB: POREĐENJE SA PRETHODNOM SEZONOM ---
+        with tab10:
+            st.subheader("🔄 Poređenje: Tekuća vs Prethodna Sezona (2025/2026)")
             
-                # fallback – ručni unos
-                fallback = st.data_editor(
-                    pd.DataFrame({
-                        "Dan": ["D+1", "D+2", "D+3"],
-                        "Spoljna T (°C)": [5, 4, 3]
-                    }),
-                    use_container_width=True
+            if df_prosla is not None:
+                # Ukupne metrike za obe sezone
+                struja_tekuca = df["Potrošena struja (kWh)"].sum()
+                struja_prosla = df_prosla["Potrošena struja (kWh)"].sum()
+                
+                cop_tekuca = df["Proizvedena energija (kWh)"].sum() / struja_tekuca if struja_tekuca > 0 else 0
+                cop_prosla = df_prosla["Proizvedena energija (kWh)"].sum() / struja_prosla if struja_prosla > 0 else 0
+                
+                rad_tekuca = df["Rad kompresora (h)"].sum()
+                rad_prosla = df_prosla["Rad kompresora (h)"].sum()
+                
+                c1, c2, c3 = st.columns(3)
+                c1.metric(
+                    "Ukupna Potrošnja Struje", 
+                    f"{int(struja_tekuca)} kWh", 
+                    delta=f"{int(struja_tekuca - struja_prosla)} kWh u odnosu na prošlu",
+                    delta_color="inverse"
                 )
-                fallback["Preporučeni LWT (°C)"] = 40 - 0.25 * fallback["Spoljna T (°C)"]
-                st.dataframe(fallback.round(1), use_container_width=True)
+                c2.metric(
+                    "Sezonski COP", 
+                    f"{cop_tekuca:.2f}", 
+                    delta=f"{cop_tekuca - cop_prosla:.2f} u odnosu na prošlu"
+                )
+                c3.metric(
+                    "Rad Kompresora", 
+                    f"{int(rad_tekuca)} h", 
+                    delta=f"{int(rad_tekuca - rad_prosla)} h u odnosu na prošlu",
+                    delta_color="inverse"
+                )
+                
+                st.divider()
+                st.write("### 📊 Mesečno poređenje potrošnje (kWh)")
+                
+                # Spajanje tabela radi lakšeg prikaza na grafikonu
+                merged_df = pd.merge(
+                    df[["Mesec", "Potrošena struja (kWh)", "COP"]], 
+                    df_prosla[["Mesec", "Potrošena struja (kWh)", "COP"]], 
+                    on="Mesec", 
+                    how="outer", 
+                    suffixes=(" (Tekuća)", " (2025/2026)")
+                )
+                
+                st.dataframe(merged_df.round(2), use_container_width=True)
+                
+                # Grafikon poređenja
+                fig_comp, ax_comp = plt.subplots(figsize=(10, 5))
+                x = np.arange(len(merged_df["Mesec"]))
+                width = 0.35
+                
+                ax_comp.bar(x - width/2, merged_df["Potrošena struja (kWh) (Tekuća)"], width, label="Tekuća Sezona", color="skyblue")
+                ax_comp.bar(x + width/2, merged_df["Potrošena struja (kWh) (2025/2026)"], width, label="Sezona 2025/2026", color="orange")
+                
+                ax_comp.set_xticks(x)
+                ax_comp.set_xticklabels(merged_df["Mesec"], rotation=45)
+                ax_comp.set_ylabel("kWh")
+                ax_comp.set_title("Poređenje potrošnje struje po mesecima")
+                ax_comp.legend()
+                ax_comp.grid(True, linestyle="--", alpha=0.5)
+                
+                st.pyplot(fig_comp)
+                plt.close(fig_comp)
+            else:
+                st.warning("⚠️ Podaci za prošlu sezonu nisu učitani. Proverite `GID_PROSLA` ili link za tabelu prošle sezone.")
 
-
-    
     except Exception as e:
-        st.error(f"⚠️ Došlo je do greške u kolonama: {e}")
+        st.error(f"⚠️ Došlo je do greške u obradi podataka: {e}")
         st.write("Sistem u tabeli vidi ove kolone:", list(df_raw.columns))
 else:
     st.warning("Čekam podatke... Unesi Google Sheets link u kod ili učitaj fajl ručno levo.")
