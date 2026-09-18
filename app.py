@@ -22,10 +22,10 @@ if not HAS_MATPLOTLIB:
 st.title("🔥 Toplotna pumpa – Kompletna Analiza Daikin EBLQ16")
 
 # --- LINKOVI ZA DVE SEZONE ---
-SHEET_ID = "1NGaf83t82G9tjsL_5wsvYNYvKii8A0biUXJkzsm9Bf8"  # Tvoja trenutna Google tabela
+SHEET_ID = "https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"  # Tvoja trenutna Google tabela
 
 # URL za TRENUTNU SEZONU (npr. 2026/2027)
-gsheet_url_tekuca = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=344695767"
+gsheet_url_tekuca = f"https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"
 
 # URL za PRETHODNU SEZONU (2025/2026) 
 # NAPOMENA: Ako je stara sezona drugi TAB u istoj tabeli, promeni samo GID (npr. gid=12345678)
