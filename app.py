@@ -21,23 +21,24 @@ if not HAS_MATPLOTLIB:
 
 st.title("🔥 Toplotna pumpa – Kompletna Analiza Daikin EBLQ16")
 
-# --- 1. LINKOVI DIREKTNO IZ BRAUZERA ---
-# Zalepi tačne linkove iz adrešne trake brauzera za svaki tab:
+# --- 1. LINKOVI KA GOOGLE SHEETS ---
+# Tekuća sezona
 LINK_TEKUCA_SEZONA = "https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"
-LINK_PROSLA_SEZONA = "https://docs.google.com/spreadsheets/d/1biFB6MgHp6e2gq51-Kr0Ey1ynrOjnas0/edit?gid=239587151#gid=239587151" 
-# NAPOMENA: Ako tabela za prošlu sezonu ima drugi GID u brauzeru, samo zalepi njen tačan URL iz brauzera gore.
+
+# Prošla sezona (AKO SU U ISTOM FAJLU, ZAMJENI SAMO GID NAKON gid=)
+# Ako je druga tabela, provjeri da li je ID tačan i postaviti "Anyone with the link can view"
+LINK_PROSLA_SEZONA = "https://docs.google.com/spreadsheets/d/1biFB6MgHp6e2gq5l-Kr0Ey1ynrOjnas0/edit?gid=239587151#gid=239587151"
 
 
-# --- 2. AUTOMATSKA KONVERZIJA U PRECIZAN CSV LINK ---
 def build_csv_export_url(url):
-    """Izvlači Sheet ID i tačan GID iz URL-a brauzera i pravi ispravan CSV export link."""
+    """Generiše čist CSV export link."""
     try:
+        if "/export?" in url:
+            return url
         sheet_id = url.split("/d/")[1].split("/")[0]
-        # Tražimo gid= u URL-u
+        gid = "0"
         if "gid=" in url:
             gid = url.split("gid=")[1].split("#")[0].split("&")[0]
-        else:
-            gid = "0"
         return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     except Exception:
         return url
@@ -52,7 +53,6 @@ def load_data(url):
         df = pd.read_csv(url)
         return df
     except Exception as e:
-        st.error(f"Greška pri povlačenju podataka sa linka ({url}): {e}")
         return None
 
 @st.cache_data(ttl=3600)
@@ -78,14 +78,14 @@ def get_weather_forecast(lat, lon):
 
 
 def clean_dataframe(df_raw):
-    """Pomoćna funkcija za čišćenje i formatiranje tabele."""
+    """Pomoćna funkcija za čišćenje i formatiranje tabele sa zaštitom od NaN vrednosti."""
     if df_raw is None:
         return None
     df = df_raw.copy()
     df.columns = [str(c).strip() for c in df.columns]
     df = df.rename(columns={"Startovi kompresora": "Startovi"})
     
-    # Uklanjanje praznih redova i redova sa sumama
+    # Uklanjanje praznih redova i sumarnih redova
     df = df[df["Mesec"].notna()]
     df = df[~df["Mesec"].astype(str).str.lower().str.contains("ukupno|suma|total")]
     
@@ -93,6 +93,7 @@ def clean_dataframe(df_raw):
         if col != "Mesec":
             df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce')
             
+    # Kalkulacije
     df["COP"] = df["Proizvedena energija (kWh)"] / df["Potrošena struja (kWh)"]
     df["kWh/dan"] = df["Potrošena struja (kWh)"] / df["Dana u mesecu"]
     df["Rad Komp %"] = (df["Rad kompresora (h)"] / df["Rad pumpe (h)"]) * 100
@@ -100,9 +101,13 @@ def clean_dataframe(df_raw):
     return df
 
 
-# 3. UČITAVANJE PODATAKA
+# 2. UČITAVANJE PODATAKA
 df_raw = load_data(gsheet_url_tekuca)
 df_raw_prosla = load_data(gsheet_url_prosla)
+
+# Ako je greška pri ucitavanju prosle sezone, obavijesti u sidebar-u
+if df_raw_prosla is None:
+    st.sidebar.warning("⚠️ Tabela za prošlu sezonu nije pronađena (provjerite link/prostorije u LINK_PROSLA_SEZONA).")
 
 # Sidebar podešavanja
 st.sidebar.header("📁 Izvor podataka")
@@ -120,13 +125,14 @@ df_prosla = clean_dataframe(df_raw_prosla)
 
 if df is not None:
     try:
-        ukupna_proizvedena = df["Proizvedena energija (kWh)"].sum()
-        ukupna_struja = df["Potrošena struja (kWh)"].sum()
-        prosek_dan = df["kWh/dan"].mean()
+        # Sigurne kalkulacije bez int(NaN) greške
+        ukupna_proizvedena = np.nan_to_num(df["Proizvedena energija (kWh)"].sum())
+        ukupna_struja = np.nan_to_num(df["Potrošena struja (kWh)"].sum())
+        prosek_dan = np.nan_to_num(df["kWh/dan"].mean())
 
-        st.success("✅ Podaci uspešno učitani!")
+        st.success("✅ Podaci za tekuću sezonu uspešno učitani!")
 
-        # 4. TABOVI
+        # TABOVI
         tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
             "📊 Pregled", "🌡 Kriva", "💡 EPS", "📅 Sezona",
             "🚀 OPTIMIZACIJA", "❄️ DEFROST", "💰 POREĐENJE",
@@ -136,14 +142,17 @@ if df is not None:
 
         with tab1:
             st.subheader("📊 Mesečni i Sezonski izveštaj")
-            sezonski_cop = df["Proizvedena energija (kWh)"].sum() / df["Potrošena struja (kWh)"].sum()
-            poslednji_red = df.iloc[-1]
+            sezonski_cop = ukupna_proizvedena / ukupna_struja if ukupna_struja > 0 else 0
+            
+            # Uzimanje poslednjeg popunjenog reda
+            df_popunjeno = df.dropna(subset=["Potrošena struja (kWh)"])
+            poslednji_red = df_popunjeno.iloc[-1] if not df_popunjeno.empty else df.iloc[-1]
             
             m0, m1, m2, m3 = st.columns(4)
             m0.metric("SEZONSKI COP (Sveukupno)", f"{sezonski_cop:.2f}")
-            m1.metric("Opterećenje (Komp/Pumpa)", f"{poslednji_red['Rad Komp %']:.1f} %")
-            m2.metric("Prosečna Snaga", f"{poslednji_red['Snaga (kW)']:.2f} kW")
-            m3.metric("Trenutni Mesečni COP", f"{poslednji_red['COP']:.2f}")
+            m1.metric("Opterećenje (Komp/Pumpa)", f"{poslednji_red.get('Rad Komp %', 0):.1f} %")
+            m2.metric("Prosečna Snaga", f"{poslednji_red.get('Snaga (kW)', 0):.2f} kW")
+            m3.metric("Trenutni Mesečni COP", f"{poslednji_red.get('COP', 0):.2f}")
             
             st.divider()
             st.write("### 📋 Pregled podataka po mesecima")
@@ -153,7 +162,7 @@ if df is not None:
             c1, c2 = st.columns(2)
             with c1:
                 fig1, ax1 = plt.subplots()
-                ax1.bar(df["Mesec"], df["kWh/dan"], color="skyblue")
+                ax1.bar(df["Mesec"], df["kWh/dan"].fillna(0), color="skyblue")
                 ax1.set_title("Potrošnja (kWh/dan)")
                 st.pyplot(fig1); plt.close(fig1)
             
@@ -169,7 +178,9 @@ if df is not None:
             st.subheader("🌡 Analiza krive grejanja")
             fig3, ax3 = plt.subplots()
             ax3.scatter(df["Spoljna T (°C)"], df["LWT (°C)"], color="red", s=100, label="Realne tačke")
-            tx = np.linspace(df["Spoljna T (°C)"].min()-2, df["Spoljna T (°C)"].max()+2, 10)
+            min_t = df["Spoljna T (°C)"].min() if not pd.isna(df["Spoljna T (°C)"].min()) else -5
+            max_t = df["Spoljna T (°C)"].max() if not pd.isna(df["Spoljna T (°C)"].max()) else 15
+            tx = np.linspace(min_t-2, max_t+2, 10)
             ty = 40 - 0.25 * tx
             ax3.plot(tx, ty, "--", color="gray", label="Referentna kriva")
             ax3.set_xlabel("Spoljna T"); ax3.set_ylabel("LWT"); ax3.legend()
@@ -179,8 +190,11 @@ if df is not None:
             st.subheader("💡 EPS Analiza i Granice")
             cena = st.number_input("Cena kWh (din)", value=10.5)
             racun_tp = ukupna_struja * cena
-            poslednji_red = df.iloc[-1]
-            potrosnja_trenutna = float(poslednji_red["Potrošena struja (kWh)"])
+            
+            df_popunjeno = df.dropna(subset=["Potrošena struja (kWh)"])
+            poslednji_red = df_popunjeno.iloc[-1] if not df_popunjeno.empty else df.iloc[-1]
+            potrosnja_trenutna = float(np.nan_to_num(poslednji_red.get("Potrošena struja (kWh)", 0)))
+            
             danasnji_dan_br = date.today().day
             dnevni_prosek = potrosnja_trenutna / danasnji_dan_br if danasnji_dan_br > 0 else 0
             
@@ -226,7 +240,8 @@ if df is not None:
             st.subheader("❄️ Analiza otapanja (Defrost)")
             v_def = st.slider("Minuta po defrostu", 5, 15, 8)
             n_def = st.slider("Defrosta po satu rada", 0.5, 3.0, 1.0)
-            gubitak = (v_def / 60) * n_def * 5 * df["Rad kompresora (h)"].sum()
+            rad_komp = np.nan_to_num(df["Rad kompresora (h)"].sum())
+            gubitak = (v_def / 60) * n_def * 5 * rad_komp
             st.metric("Gubitak na defrost", f"{int(gubitak)} kWh")
 
         with tab7:
@@ -250,7 +265,7 @@ if df is not None:
             meseci = df["Mesec"].astype(str).unique().tolist()
             izabrani_mesec = st.selectbox("Izaberi mesec", meseci, index=len(meseci)-1)
             red_iz_baze = df[df["Mesec"].astype(str) == izabrani_mesec].iloc[0]
-            trenutna_potrosnja = float(red_iz_baze["Potrošena struja (kWh)"])
+            trenutna_potrosnja = float(np.nan_to_num(red_iz_baze.get("Potrošena struja (kWh)", 0)))
             
             prognoza_30_dana = (trenutna_potrosnja / danasnji_dan_br) * 30 if danasnji_dan_br > 0 else 0
             st.metric("PROGNOZA (30 DANA)", f"{int(prognoza_30_dana)} kWh")
@@ -268,26 +283,26 @@ if df is not None:
             st.subheader("🔄 Poređenje: Tekuća vs Prethodna Sezona")
             
             if df_prosla is not None:
-                if LINK_TEKUCA_SEZONA == LINK_PROSLA_SEZONA:
-                    st.warning("⚠️ Trenutno je unet isti link za obe sezone! Unesite link druge sezone u `LINK_PROSLA_SEZONA` na vrhu koda.")
-
                 redosled_meseci = ["Oktobar", "Novembar", "Decembar", "Januar", "Februar", "Mart", "April", "Maj"]
 
                 df_tekuca_clean = df.dropna(subset=["Potrošena struja (kWh)"]).copy()
                 df_prosla_clean = df_prosla.dropna(subset=["Potrošena struja (kWh)"]).copy()
 
-                struja_tekuca = df_tekuca_clean["Potrošena struja (kWh)"].sum()
-                struja_prosla = df_prosla_clean["Potrošena struja (kWh)"].sum()
+                struja_tekuca = np.nan_to_num(df_tekuca_clean["Potrošena struja (kWh)"].sum())
+                struja_prosla = np.nan_to_num(df_prosla_clean["Potrošena struja (kWh)"].sum())
                 
-                cop_tekuca = df_tekuca_clean["Proizvedena energija (kWh)"].sum() / struja_tekuca if struja_tekuca > 0 else 0
-                cop_prosla = df_prosla_clean["Proizvedena energija (kWh)"].sum() / struja_prosla if struja_prosla > 0 else 0
+                proizvedeno_tekuca = np.nan_to_num(df_tekuca_clean["Proizvedena energija (kWh)"].sum())
+                proizvedeno_prosla = np.nan_to_num(df_prosla_clean["Proizvedena energija (kWh)"].sum())
                 
-                rad_tekuca = df_tekuca_clean["Rad kompresora (h)"].sum()
-                rad_prosla = df_prosla_clean["Rad kompresora (h)"].sum()
+                cop_tekuca = proizvedeno_tekuca / struja_tekuca if struja_tekuca > 0 else 0
+                cop_prosla = proizvedeno_prosla / struja_prosla if struja_prosla > 0 else 0
+                
+                rad_tekuca = np.nan_to_num(df_tekuca_clean["Rad kompresora (h)"].sum())
+                rad_prosla = np.nan_to_num(df_prosla_clean["Rad kompresora (h)"].sum())
                 
                 c1, c2, c3 = st.columns(3)
                 c1.metric(
-                    "Ukupna Potrošna Struje", 
+                    "Ukupna Potrošnja Struje", 
                     f"{int(struja_tekuca)} kWh", 
                     delta=f"{int(struja_tekuca - struja_prosla)} kWh u odnosu na prošlu",
                     delta_color="inverse"
@@ -342,10 +357,10 @@ if df is not None:
                 st.pyplot(fig_comp)
                 plt.close(fig_comp)
             else:
-                st.warning("⚠️ Podaci za prošlu sezonu nisu učitani.")
+                st.warning("⚠️ Podaci za prošlu sezonu nisu učitani. Proverite link u `LINK_PROSLA_SEZONA` (mora biti dostupan javno preko opcije Share).")
 
     except Exception as e:
         st.error(f"⚠️ Došlo je do greške u obradi podataka: {e}")
         st.write("Sistem u tabeli vidi ove kolone:", list(df_raw.columns))
 else:
-    st.warning("Čekam podatke...")
+    st.warning("Čekam podatke... Proverite da li je glavni Google Sheets link ispravno postavljen.")
