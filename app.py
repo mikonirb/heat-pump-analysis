@@ -27,21 +27,30 @@ LINK_TEKUCA_SEZONA = "https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHw
 
 # Link za PRETHODNU sezonu (2025/2026):
 # (Ako je na drugom tabu u istom fajlu ili u drugom fajlu, ovde nalepite pun URL tog taba)
-LINK_PROSLA_SEZONA = "https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"
+LINK_PROSLA_SEZONA = "https://docs.google.com/spreadsheets/d/1biFB6MgHp6e2gq5l-Kr0Ey1ynrOjnas0/edit?gid=239587151#gid=239587151"
 
 
-def convert_google_sheet_url(url):
-    """Pretvara običan Google Sheets URL u direktan CSV export link."""
-    try:
-        if "/export?" in url:
-            return url
-        sheet_id = url.split("/d/")[1].split("/")[0]
-        gid = "0"
-        if "gid=" in url:
-            gid = url.split("gid=")[1].split("#")[0].split("&")[0]
-        return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-    except Exception:
-        return url
+def clean_dataframe(df_raw):
+    """Pomoćna funkcija za čišćenje i formatiranje tabele."""
+    if df_raw is None:
+        return None
+    df = df_raw.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    df = df.rename(columns={"Startovi kompresora": "Startovi"})
+    
+    # Uklanjanje redova gde je Mesec prazan ili sadrži zbir/ukupno
+    df = df[df["Mesec"].notna()]
+    df = df[~df["Mesec"].astype(str).str.lower().str.contains("ukupno|suma|total")]
+    
+    for col in df.columns:
+        if col != "Mesec":
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce')
+            
+    df["COP"] = df["Proizvedena energija (kWh)"] / df["Potrošena struja (kWh)"]
+    df["kWh/dan"] = df["Potrošena struja (kWh)"] / df["Dana u mesecu"]
+    df["Rad Komp %"] = (df["Rad kompresora (h)"] / df["Rad pumpe (h)"]) * 100
+    df["Snaga (kW)"] = df["Proizvedena energija (kWh)"] / df["Rad kompresora (h)"]
+    return df
 
 gsheet_url_tekuca = convert_google_sheet_url(LINK_TEKUCA_SEZONA)
 gsheet_url_prosla = convert_google_sheet_url(LINK_PROSLA_SEZONA)
@@ -263,17 +272,28 @@ if df is not None:
 
         # --- TAB: POREĐENJE SA PRETHODNOM SEZONOM ---
         with tab10:
-            st.subheader("🔄 Poređenje: Tekuća vs Prethodna Sezona (2025/2026)")
+            st.subheader("🔄 Poređenje: Tekuća vs Prethodna Sezona")
             
             if df_prosla is not None:
-                struja_tekuca = df["Potrošena struja (kWh)"].sum()
-                struja_prosla = df_prosla["Potrošena struja (kWh)"].sum()
+                # Provera da li su linkovi slučajno isti
+                if LINK_TEKUCA_SEZONA == LINK_PROSLA_SEZONA:
+                    st.warning("⚠️ Trenutno je unet isti link za obe sezone! Unesite link/GID drugog taba u `LINK_PROSLA_SEZONA` na vrhu koda.")
+
+                # Redosled meseci u grejnoj sezoni
+                redosled_meseci = ["Oktobar", "Novembar", "Decembar", "Januar", "Februar", "Mart", "April", "Maj"]
+
+                # Očišćeni podaci bez None/NaN vrednosti u ključnim kolonama
+                df_tekuca_clean = df.dropna(subset=["Potrošena struja (kWh)"]).copy()
+                df_prosla_clean = df_prosla.dropna(subset=["Potrošena struja (kWh)"]).copy()
+
+                struja_tekuca = df_tekuca_clean["Potrošena struja (kWh)"].sum()
+                struja_prosla = df_prosla_clean["Potrošena struja (kWh)"].sum()
                 
-                cop_tekuca = df["Proizvedena energija (kWh)"].sum() / struja_tekuca if struja_tekuca > 0 else 0
-                cop_prosla = df_prosla["Proizvedena energija (kWh)"].sum() / struja_prosla if struja_prosla > 0 else 0
+                cop_tekuca = df_tekuca_clean["Proizvedena energija (kWh)"].sum() / struja_tekuca if struja_tekuca > 0 else 0
+                cop_prosla = df_prosla_clean["Proizvedena energija (kWh)"].sum() / struja_prosla if struja_prosla > 0 else 0
                 
-                rad_tekuca = df["Rad kompresora (h)"].sum()
-                rad_prosla = df_prosla["Rad kompresora (h)"].sum()
+                rad_tekuca = df_tekuca_clean["Rad kompresora (h)"].sum()
+                rad_prosla = df_prosla_clean["Rad kompresora (h)"].sum()
                 
                 c1, c2, c3 = st.columns(3)
                 c1.metric(
@@ -297,25 +317,37 @@ if df is not None:
                 st.divider()
                 st.write("### 📊 Mesečno poređenje potrošnje (kWh)")
                 
+                # Spajanje po mesecima
                 merged_df = pd.merge(
-                    df[["Mesec", "Potrošena struja (kWh)", "COP"]], 
-                    df_prosla[["Mesec", "Potrošena struja (kWh)", "COP"]], 
+                    df_tekuca_clean[["Mesec", "Potrošena struja (kWh)", "COP"]], 
+                    df_prosla_clean[["Mesec", "Potrošena struja (kWh)", "COP"]], 
                     on="Mesec", 
                     how="outer", 
-                    suffixes=(" (Tekuća)", " (2025/2026)")
+                    suffixes=(" (Tekuća)", " (Prošla)")
                 )
+
+                # Sortiranje po redosledu sezonskih meseci
+                merged_df['Mesec_Cat'] = pd.Categorical(merged_df['Mesec'], categories=redosled_meseci, ordered=True)
+                merged_df = merged_df.sort_values('Mesec_Cat').drop(columns=['Mesec_Cat'])
                 
-                st.dataframe(merged_df.round(2), use_container_width=True)
+                # Zamenjujemo NaN sa 0 ili izbacujemo prazne redove
+                merged_df_display = merged_df.dropna(how='all', subset=["Potrošena struja (kWh) (Tekuća)", "Potrošena struja (kWh) (Prošla)"])
                 
-                fig_comp, ax_comp = plt.subplots(figsize=(10, 5))
-                x = np.arange(len(merged_df["Mesec"]))
+                st.dataframe(merged_df_display.fillna("-").round(2), use_container_width=True)
+                
+                # Plotovanje grafikona samo za mesece koji imaju podatke
+                fig_comp, ax_comp = plt.subplots(figsize=(10, 4))
+                x = np.arange(len(merged_df_display["Mesec"]))
                 width = 0.35
                 
-                ax_comp.bar(x - width/2, merged_df["Potrošena struja (kWh) (Tekuća)"], width, label="Tekuća Sezona", color="skyblue")
-                ax_comp.bar(x + width/2, merged_df["Potrošena struja (kWh) (2025/2026)"], width, label="Sezona 2025/2026", color="orange")
+                y_tekuca = merged_df_display["Potrošena struja (kWh) (Tekuća)"].fillna(0)
+                y_prosla = merged_df_display["Potrošena struja (kWh) (Prošla)"].fillna(0)
+                
+                ax_comp.bar(x - width/2, y_tekuca, width, label="Tekuća Sezona", color="skyblue")
+                ax_comp.bar(x + width/2, y_prosla, width, label="Prethodna Sezona", color="orange")
                 
                 ax_comp.set_xticks(x)
-                ax_comp.set_xticklabels(merged_df["Mesec"], rotation=45)
+                ax_comp.set_xticklabels(merged_df_display["Mesec"], rotation=0)
                 ax_comp.set_ylabel("kWh")
                 ax_comp.set_title("Poređenje potrošnje struje po mesecima")
                 ax_comp.legend()
@@ -324,7 +356,7 @@ if df is not None:
                 st.pyplot(fig_comp)
                 plt.close(fig_comp)
             else:
-                st.warning("⚠️ Podaci za prošlu sezonu nisu učitani. Proverite `LINK_PROSLA_SEZONA`.")
+                st.warning("⚠️ Podaci za prošlu sezonu nisu učitani.")
 
     except Exception as e:
         st.error(f"⚠️ Došlo je do greške u obradi podataka: {e}")
