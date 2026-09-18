@@ -21,18 +21,30 @@ if not HAS_MATPLOTLIB:
 
 st.title("🔥 Toplotna pumpa – Kompletna Analiza Daikin EBLQ16")
 
-# --- LINKOVI ZA DVE SEZONE ---
-SHEET_ID = "17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"  # Tvoja trenutna Google tabela
+# --- UNESITE VAŠE DIREKTNE LINKOVE IZ PRETRAŽIVAČA OVDE ---
+# Link za TRENUTNU (tekuću) sezonu:
+LINK_TEKUCA_SEZONA = "https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"
 
-# URL za TRENUTNU SEZONU (npr. 2026/2027)
-gsheet_url_tekuca = f"https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"
+# Link za PRETHODNU sezonu (2025/2026):
+# (Ako je na drugom tabu u istom fajlu ili u drugom fajlu, ovde nalepite pun URL tog taba)
+LINK_PROSLA_SEZONA = "https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"
 
-# URL za PRETHODNU SEZONU (2025/2026) 
-# NAPOMENA: Ako je stara sezona drugi TAB u istoj tabeli, promeni samo GID (npr. gid=12345678)
-# Ako je zaseban fajl, unesi novi SHEET_ID.
-SHEET_ID_PROSLA = "1NGaf83t82G9tjsL_5wsvYNYvKii8A0biUXJkzsm9Bf8" 
-GID_PROSLA = "0" # Zameniti sa odgovarajućim GID-om za tab prošle sezone
-gsheet_url_prosla = f"https://docs.google.com/spreadsheets/d/{SHEET_ID_PROSLA}/export?format=csv&gid={GID_PROSLA}"
+
+def convert_google_sheet_url(url):
+    """Pretvara običan Google Sheets URL u direktan CSV export link."""
+    try:
+        if "/export?" in url:
+            return url
+        sheet_id = url.split("/d/")[1].split("/")[0]
+        gid = "0"
+        if "gid=" in url:
+            gid = url.split("gid=")[1].split("#")[0].split("&")[0]
+        return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+    except Exception:
+        return url
+
+gsheet_url_tekuca = convert_google_sheet_url(LINK_TEKUCA_SEZONA)
+gsheet_url_prosla = convert_google_sheet_url(LINK_PROSLA_SEZONA)
 
 
 @st.cache_data(ttl=60)
@@ -41,7 +53,7 @@ def load_data(url):
         df = pd.read_csv(url)
         return df
     except Exception as e:
-        st.error(f"Greška pri povlačenju podataka: {e}")
+        st.error(f"Greška pri povlačenju podataka sa linka ({url}): {e}")
         return None
 
 @st.cache_data(ttl=3600)
@@ -111,7 +123,7 @@ if df is not None:
 
         st.success("✅ Podaci uspešno učitani!")
 
-        # 3. SVIH 10 TABOVA (DODAT TAB ZA POREĐENJE SEZONA)
+        # 3. SVIH 10 TABOVA
         tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
             "📊 Pregled", "🌡 Kriva", "💡 EPS", "📅 Sezona",
             "🚀 OPTIMIZACIJA", "❄️ DEFROST", "💰 POREĐENJE",
@@ -249,12 +261,11 @@ if df is not None:
             except Exception as e:
                 st.error("Nije moguće učitati prognozu.")
 
-        # --- NOVI TAB: POREĐENJE SA PRETHODNOM SEZONOM ---
+        # --- TAB: POREĐENJE SA PRETHODNOM SEZONOM ---
         with tab10:
             st.subheader("🔄 Poređenje: Tekuća vs Prethodna Sezona (2025/2026)")
             
             if df_prosla is not None:
-                # Ukupne metrike za obe sezone
                 struja_tekuca = df["Potrošena struja (kWh)"].sum()
                 struja_prosla = df_prosla["Potrošena struja (kWh)"].sum()
                 
@@ -286,7 +297,6 @@ if df is not None:
                 st.divider()
                 st.write("### 📊 Mesečno poređenje potrošnje (kWh)")
                 
-                # Spajanje tabela radi lakšeg prikaza na grafikonu
                 merged_df = pd.merge(
                     df[["Mesec", "Potrošena struja (kWh)", "COP"]], 
                     df_prosla[["Mesec", "Potrošena struja (kWh)", "COP"]], 
@@ -297,7 +307,6 @@ if df is not None:
                 
                 st.dataframe(merged_df.round(2), use_container_width=True)
                 
-                # Grafikon poređenja
                 fig_comp, ax_comp = plt.subplots(figsize=(10, 5))
                 x = np.arange(len(merged_df["Mesec"]))
                 width = 0.35
@@ -315,10 +324,10 @@ if df is not None:
                 st.pyplot(fig_comp)
                 plt.close(fig_comp)
             else:
-                st.warning("⚠️ Podaci za prošlu sezonu nisu učitani. Proverite `GID_PROSLA` ili link za tabelu prošle sezone.")
+                st.warning("⚠️ Podaci za prošlu sezonu nisu učitani. Proverite `LINK_PROSLA_SEZONA`.")
 
     except Exception as e:
         st.error(f"⚠️ Došlo je do greške u obradi podataka: {e}")
         st.write("Sistem u tabeli vidi ove kolone:", list(df_raw.columns))
 else:
-    st.warning("Čekam podatke... Unesi Google Sheets link u kod ili učitaj fajl ručno levo.")
+    st.warning("Čekam podatke... Proverite da li su Google Sheets linkovi javno dostupni (Anyone with the link can view).")
