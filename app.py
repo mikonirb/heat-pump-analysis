@@ -21,31 +21,29 @@ if not HAS_MATPLOTLIB:
 
 st.title("🔥 Toplotna pumpa – Kompletna Analiza Daikin EBLQ16")
 
-# --- 1. DEFINISANJE LINKOVA ---
-# Vaš link za tekuću sezonu
+# --- 1. LINKOVI DIREKTNO IZ BRAUZERA ---
+# Zalepi tačne linkove iz adrešne trake brauzera za svaki tab:
 LINK_TEKUCA_SEZONA = "https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"
+LINK_PROSLA_SEZONA = "https://docs.google.com/spreadsheets/d/1biFB6MgHp6e2gq51-Kr0Ey1ynrOjnas0/edit?gid=239587151#gid=239587151" 
+# NAPOMENA: Ako tabela za prošlu sezonu ima drugi GID u brauzeru, samo zalepi njen tačan URL iz brauzera gore.
 
-# Unesite link/GID za prošlu sezonu (promijenite gid ako je u drugom tabu)
-LINK_PROSLA_SEZONA = "https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"
 
-
-# --- 2. DEFINISANJE FUNKCIJA (MORA BITI PRIJE POZIVA) ---
-def convert_google_sheet_url(url):
-    """Pretvara običan Google Sheets URL u direktan CSV export link."""
+# --- 2. AUTOMATSKA KONVERZIJA U PRECIZAN CSV LINK ---
+def build_csv_export_url(url):
+    """Izvlači Sheet ID i tačan GID iz URL-a brauzera i pravi ispravan CSV export link."""
     try:
-        if "/export?" in url:
-            return url
         sheet_id = url.split("/d/")[1].split("/")[0]
-        gid = "0"
+        # Tražimo gid= u URL-u
         if "gid=" in url:
             gid = url.split("gid=")[1].split("#")[0].split("&")[0]
+        else:
+            gid = "0"
         return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     except Exception:
         return url
 
-# --- 3. POZIV FUNKCIJA I KONVERZIJA LINKOVA ---
-gsheet_url_tekuca = convert_google_sheet_url(LINK_TEKUCA_SEZONA)
-gsheet_url_prosla = convert_google_sheet_url(LINK_PROSLA_SEZONA)
+gsheet_url_tekuca = build_csv_export_url(LINK_TEKUCA_SEZONA)
+gsheet_url_prosla = build_csv_export_url(LINK_PROSLA_SEZONA)
 
 
 @st.cache_data(ttl=60)
@@ -102,7 +100,7 @@ def clean_dataframe(df_raw):
     return df
 
 
-# 4. UČITAVANJE PODATAKA
+# 3. UČITAVANJE PODATAKA
 df_raw = load_data(gsheet_url_tekuca)
 df_raw_prosla = load_data(gsheet_url_prosla)
 
@@ -128,7 +126,7 @@ if df is not None:
 
         st.success("✅ Podaci uspešno učitani!")
 
-        # 5. TABOVI
+        # 4. TABOVI
         tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
             "📊 Pregled", "🌡 Kriva", "💡 EPS", "📅 Sezona",
             "🚀 OPTIMIZACIJA", "❄️ DEFROST", "💰 POREĐENJE",
@@ -271,7 +269,7 @@ if df is not None:
             
             if df_prosla is not None:
                 if LINK_TEKUCA_SEZONA == LINK_PROSLA_SEZONA:
-                    st.warning("⚠️ Trenutno je unet isti link za obe sezone! Unesite `gid` drugog taba u `LINK_PROSLA_SEZONA` na vrhu koda.")
+                    st.warning("⚠️ Trenutno je unet isti link za obe sezone! Unesite link druge sezone u `LINK_PROSLA_SEZONA` na vrhu koda.")
 
                 redosled_meseci = ["Oktobar", "Novembar", "Decembar", "Januar", "Februar", "Mart", "April", "Maj"]
 
@@ -289,7 +287,7 @@ if df is not None:
                 
                 c1, c2, c3 = st.columns(3)
                 c1.metric(
-                    "Ukupna Potrošnja Struje", 
+                    "Ukupna Potrošna Struje", 
                     f"{int(struja_tekuca)} kWh", 
                     delta=f"{int(struja_tekuca - struja_prosla)} kWh u odnosu na prošlu",
                     delta_color="inverse"
