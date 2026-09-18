@@ -26,7 +26,7 @@ st.title("🔥 Toplotna pumpa – Kompletna Analiza Daikin EBLQ16")
 LINK_TEKUCA_SEZONA = "https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"
 
 # Unesite link/GID za prošlu sezonu (promijenite gid ako je u drugom tabu)
-LINK_PROSLA_SEZONA = "https://docs.google.com/spreadsheets/d/1biFB6MgHp6e2gq5l-Kr0Ey1ynrOjnas0/edit?gid=239587151#gid=239587151"
+LINK_PROSLA_SEZONA = "https://docs.google.com/spreadsheets/d/1biFB6MgHp6e2gq5l-Kr0Ey1ynrOjnas0/edit?gid=239587151#gid=0"
 
 
 # --- 2. DEFINISANJE FUNKCIJA (MORA BITI PRIJE POZIVA) ---
