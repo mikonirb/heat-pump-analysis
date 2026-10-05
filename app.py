@@ -248,15 +248,15 @@ if df is not None:
             st.subheader("💰 Poređenje troškova grejanja")
             c1, c2, c3 = st.columns(3)
             with c1:
-                cena_drva = st.number_input("Cena drva (din/m3)", value=9000)
+                cena_drva = st.number_input("Cena drva (din/m3)", value=12000)
                 t_drva = (ukupna_proizvedena / 1400) * cena_drva
                 st.metric("Drva", f"{int(t_drva)} RSD", delta=f"{int(t_drva - racun_tp)} RSD")
             with c2:
-                cena_peleta = st.number_input("Cena peleta (din/kg)", value=36)
+                cena_peleta = st.number_input("Cena peleta (din/kg)", value=47)
                 t_peleta = (ukupna_proizvedena / 4.8) * cena_peleta
                 st.metric("Pelet", f"{int(t_peleta)} RSD", delta=f"{int(t_peleta - racun_tp)} RSD")
             with c3:
-                cena_gasa = st.number_input("Cena gasa (din/m3)", value=55)
+                cena_gasa = st.number_input("Cena gasa (din/m3)", value=50)
                 t_gas = (ukupna_proizvedena / 9.5) * cena_gasa
                 st.metric("Gas", f"{int(t_gas)} RSD", delta=f"{int(t_gas - racun_tp)} RSD")
 
@@ -274,7 +274,7 @@ if df is not None:
             st.subheader("🌦 Vremenska prognoza i preporučeni LWT")
             try:
                 prog = get_weather_forecast(lat, lon)
-                prog["Preporučeni LWT (°C)"] = 40 - 0.25 * prog["Spoljna T (°C)"]
+                prog["Preporučeni LWT (°C)"] = 35 - 0.25 * prog["Spoljna T (°C)"]
                 st.dataframe(prog.round(1), use_container_width=True)
             except Exception as e:
                 st.error("Nije moguće učitati prognozu.")
