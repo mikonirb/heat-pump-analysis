@@ -175,16 +175,35 @@ if df is not None:
                 st.pyplot(fig2); plt.close(fig2)
 
         with tab2:
-            st.subheader("🌡 Analiza krive grejanja")
+            st.subheader("🌡 Analiza krive grejanja (Prilagođeno tvojoj kući)")
             fig3, ax3 = plt.subplots()
             ax3.scatter(df["Spoljna T (°C)"], df["LWT (°C)"], color="red", s=100, label="Realne tačke")
-            min_t = df["Spoljna T (°C)"].min() if not pd.isna(df["Spoljna T (°C)"].min()) else -5
+            
+            min_t = df["Spoljna T (°C)"].min() if not pd.isna(df["Spoljna T (°C)"].min()) else -10
             max_t = df["Spoljna T (°C)"].max() if not pd.isna(df["Spoljna T (°C)"].max()) else 15
             tx = np.linspace(min_t-2, max_t+2, 10)
-            ty = 40 - 0.25 * tx
-            ax3.plot(tx, ty, "--", color="gray", label="Referentna kriva")
-            ax3.set_xlabel("Spoljna T"); ax3.set_ylabel("LWT"); ax3.legend()
+            
+            # Tvoja prava kriva: +12°C -> 33°C, -10°C -> 40°C
+            ty = 37 - 0.32 * tx
+            
+            ax3.plot(tx, ty, "--", color="gray", label="Tvoja referentna kriva (37 - 0.32 * T)")
+            ax3.set_xlabel("Spoljna T (°C)")
+            ax3.set_ylabel("LWT (°C)")
+            ax3.legend()
+            ax3.grid(True)
             st.pyplot(fig3); plt.close(fig3)
+            
+            # Proračun odstupanja na osnovu tvoje krive
+            idealni_lwt = 37 - 0.32 * df["Spoljna T (°C)"]
+            odstupanje = df["LWT (°C)"] - idealni_lwt
+            prosek_odstupanja = odstupanje.mean()
+
+            if prosek_odstupanja > 1.5:
+                st.warning("🔺 LWT je u proseku viši od tvoje idealne krive – postoji prostor za blago smanjenje polazne temperature.")
+            elif prosek_odstupanja < -1:
+                st.info("🔹 LWT je niži od tvoje referentne krive – sistem radi izuzetno ekonomično.")
+            else:
+                st.success("✅ Kriva grejanja je savršeno podešena prema tvojim parametrima (+12°C/33°C i -10°C/40°C).")
 
         with tab3:
             st.subheader("💡 EPS Analiza i Granice")
@@ -272,10 +291,29 @@ if df is not None:
 
         with tab9:
             st.subheader("🌦 Vremenska prognoza i preporučeni LWT")
+            
             try:
                 prog = get_weather_forecast(lat, lon)
-                prog["Preporučeni LWT (°C)"] = 35 - 0.25 * prog["Spoljna T (°C)"]
+                
+                # Primena tvoje tačne krive grejanja
+                prog["Preporučeni LWT (°C)"] = 37 - 0.32 * prog["Spoljna T (°C)"]
+            
                 st.dataframe(prog.round(1), use_container_width=True)
+            
+                # Grafikon
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.plot(prog["Dan"], prog["Preporučeni LWT (°C)"], marker="o", color="orange")
+                ax.set_ylabel("LWT (°C)")
+                ax.set_title("Preporučeni LWT za narednih 7 dana (po tvojoj krivoj)")
+                ax.grid(True)
+                st.pyplot(fig); plt.close(fig)
+            
+                # Defrost upozorenje
+                if (prog["T_min (°C)"] < 2).any():
+                    st.warning("❄️ Najavljene minimalne temperature ispod 2 °C – mogući češći defrosti.")
+                else:
+                    st.success("✅ Nema povećanog rizika od defrosta.")
+            
             except Exception as e:
                 st.error("Nije moguće učitati prognozu.")
 
