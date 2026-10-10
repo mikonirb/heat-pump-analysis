@@ -23,7 +23,7 @@ st.title("🔥 Toplotna pumpa – Kompletna Analiza Daikin EBLQ16")
 
 # --- 1. LINKOVI KA GOOGLE SHEETS ---
 # Tekuća sezona
-LINK_TEKUCA_SEZONA = "https://docs.google.com/spreadsheets/d/17KazEx-_lCzilvrxHwt8V7WMltRmEEXj/edit?gid=239587151#gid=239587151"
+LINK_TEKUCA_SEZONA = "https://docs.google.com/spreadsheets/d/1ERpcqgVZK0301yqUmcGB5hnMAtz0cV3yeXV99g_T-YU/edit?gid=239587151#gid=239587151"
 
 # Prošla sezona (AKO SU U ISTOM FAJLU, ZAMJENI SAMO GID NAKON gid=)
 # Ako je druga tabela, provjeri da li je ID tačan i postaviti "Anyone with the link can view"
